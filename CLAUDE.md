@@ -16,7 +16,7 @@ comments such as "see Task 5.1").
 ## Commands
 
 ```bash
-npm test                    # vitest + jsdom (103 tests). Do NOT pass --pool=threads (see below)
+npm test                    # vitest + jsdom. Do NOT pass --pool=threads (see below)
 npm test -- test/dom-glue.test.ts          # one file
 npm test -- -t 'inputMode'                 # one describe/it by name
 npm run test:watch
@@ -24,7 +24,7 @@ npm run typecheck           # tsc --noEmit — esbuild strips types but never ch
 npm run lint:independence   # grep gate: fails if src/ names a specific host
 npm run build               # dist/glk-touch.js + dist/glk-touch.css
 npm run dev                 # esbuild --watch (also emits a git-ignored .map)
-npm run test:e2e            # playwright: 49 tests x (chromium + webkit) against REAL hosts
+npm run test:e2e            # playwright: (chromium + webkit) against REAL hosts
 npx playwright test --project=webkit parchmap.spec        # one project + one spec
 npx playwright test -g 'MAP UPDATES'                      # one test by name
 sh scripts/ci.sh            # every gate, fail-fastest order — this is the release gate

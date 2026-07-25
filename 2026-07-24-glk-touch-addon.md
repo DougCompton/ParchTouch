@@ -2263,7 +2263,7 @@ over HTTP.
   }
   ```
 
-- [ ] **Task 4.2: Start the watch build**
+- [x] **Task 4.2: Start the watch build**
 
   Browsers cannot execute `.ts`, so the harness serves the bundle. The `dev` script (already defined in
   `package.json`, Task 0.1) rebuilds it on every save:
@@ -2332,7 +2332,7 @@ over HTTP.
   </html>
   ```
 
-- [ ] **Task 4.4: Load the addon into Parchmap's page**
+- [x] **Task 4.4: Load the addon into Parchmap's page**
 
   Append to `harness/vendor/parchmap/play.html`, immediately before `</body>` — **after** all of
   Parchmap's own scripts, so `.BufferWindow` exists and its handlers are already bound:
@@ -2361,7 +2361,7 @@ over HTTP.
 
 ### Tasks
 
-- [ ] **Task 5.1: Confirm the DOM contract in modern Parchment**
+- [x] **Task 5.1: Confirm the DOM contract in modern Parchment**
 
   Build once (`npm run build`), start the harness, open the Parchment page, and in the console:
 
@@ -2406,7 +2406,7 @@ over HTTP.
   the one place synthetic-event behaviour can differ from desktop (iOS is stricter), and it is the
   primary target device — a desktop-only pass is not evidence.
 
-- [ ] **Task 5.4: Verify the shipped bundle, not just the source**
+- [x] **Task 5.4: Verify the shipped bundle, not just the source**
 
   The harness already loads `dist/glk-touch.js`, so confirm the artifact is the real thing:
 
@@ -2416,7 +2416,7 @@ over HTTP.
   ```
   Reload the harness page with devtools open: no module-loading errors, bar renders, a tap works.
 
-- [ ] **Task 5.5: Record findings**
+- [x] **Task 5.5: Record findings**
 
   File: `docs/COMPATIBILITY.md`
 
@@ -2442,7 +2442,7 @@ over HTTP.
   - `?story=` accepts a path outside `games/`: `<yes/no>`
   ```
 
-- [ ] **Task 5.6: Commit**
+- [x] **Task 5.6: Commit**
 
   ```bash
   git add docs/COMPATIBILITY.md
@@ -2471,7 +2471,7 @@ same output. These checks are the crux of the "works with Parchmap" claim.
 
 ### Tasks
 
-- [ ] **Task 6.1: Does the map update when *we* submit the command?**
+- [x] **Task 6.1: Does the map update when *we* submit the command?**
 
   Parchmap builds its map by reading echoed input from the DOM
   (`$($(".Style_input").get().reverse())`), which appears **however** the command was submitted — so it
@@ -2515,7 +2515,7 @@ same output. These checks are the crux of the "works with Parchmap" claim.
   jQuery dispatch is attempted when a `window.jQuery` stub exists, and one asserting `submitCommand`
   still returns `true` and does not throw when `window.jQuery` is absent.
 
-- [ ] **Task 6.2: Does its input handling collide with ours?**
+- [x] **Task 6.2: Does its input handling collide with ours?**
 
   Parchmap **appends** to the field and clears via `Input.Clear()`; we **assign**.
 
@@ -2553,7 +2553,7 @@ same output. These checks are the crux of the "works with Parchmap" claim.
   5. Devtools Network: no google-analytics.com (GA_TRACK=false), no other third-party requests
   ```
 
-- [ ] **Task 6.5: Narrow the map selector, record findings, commit**
+- [x] **Task 6.5: Narrow the map selector, record findings, commit**
 
   Find the real map container and narrow `MAP_SELECTORS` if the generic list is over-broad:
   ```bash
@@ -2808,7 +2808,7 @@ same output. These checks are the crux of the "works with Parchmap" claim.
   Run: `npm test`
   Expected: all PASS, zero failures, zero skipped.
 
-- [ ] **Task F.3: Independence gate**
+- [x] **Task F.3: Independence gate**
 
   Run: `npm run lint:independence`
   Expected: `OK: no host-specific references in src/`
