@@ -1,83 +1,148 @@
-/**
- * Pure command model for the touch addon — no DOM, no storage, no side effects.
+/*
+ * command-model.ts — pure command-building logic for the glk-touch overlay.
  *
- * PHASE 0 STUB: signatures only. Every function body throws so that the frozen
- * test suite fails for FEATURE reasons rather than module-resolution reasons.
- * Phase 1 replaces these bodies with the real implementation.
+ * SPDX-License-Identifier: MIT
+ * Copyright (c) 2026 Doug Compton
+ *
+ * NO DOM, NO globals, NO side effects: every function is a pure transform, which is what makes the
+ * interaction rules unit-testable without a browser. All DOM/GlkOte contact lives in if-buttons.ts.
+ * State is immutable — each tap returns a NEW state plus the command to send (or null when the tap
+ * only armed something).
+ *
+ * Hosts never load this file: esbuild bundles it with if-buttons.ts into one classic script.
+ * Targets ES2018+ (Unicode property escapes, /\p{L}/u) so accented nouns are tappable.
  */
 
-/** A single slice of story text: either a tappable word or the glue between words. */
+/** One run of text from the story, flagged as a tappable word or as separator/punctuation. */
 export interface Token {
   readonly text: string
   readonly isWord: boolean
 }
 
-/** The two half-commands the player can have armed at any moment. */
+/** A verb or a noun may be "armed", waiting for its partner tap. Never both at once. */
 export interface CommandState {
   readonly pendingVerb: string | null
   readonly pendingNoun: string | null
 }
 
-/** The outcome of one tap: the next state, plus a command to send if one completed. */
+/** Result of a tap: the next state, plus a command to send if the tap completed one. */
 export interface TapResult {
   readonly state: CommandState
   readonly command: string | null
 }
 
-/** Longest command string the addon will ever submit to the interpreter. */
+/** Anything a caller might hand us from the DOM or from storage. */
+type Loose = string | number | null | undefined
+
+// Z-machine parsers accept short lines; this also bounds anything pathological arriving from story
+// text (a "word" is only as trustworthy as the game that printed it).
 export const MAX_COMMAND_LENGTH = 120
 
-/** Most verbs the player may keep in the bar. */
+// Default verb set. Core verbs cover the large majority of turns; the player can add or remove any
+// of them, because vocabularies differ per game (decision D3).
+export const DEFAULT_VERBS: readonly string[] = [
+  'examine', 'take', 'drop', 'open', 'close', 'read', 'search',
+  'push', 'pull', 'turn on', 'turn off', 'unlock', 'wear', 'enter',
+]
 export const MAX_VERBS = 40
-
-/** Longest single verb the addon will store. */
 export const MAX_VERB_LENGTH = 30
 
+function str(v: Loose): string {
+  return (v === null || v === undefined) ? '' : String(v)
+}
+
 /**
- * STUB: intentionally empty so no verb-list test can accidentally pass in Phase 0.
- * Phase 1 populates the real default set.
+ * Lowercase, trim, strip surrounding punctuation/quotes and a trailing possessive.
+ * Keeps internal hyphens (jewel-encrusted) and non-ASCII letters (café).
  */
-export const DEFAULT_VERBS: readonly string[] = []
-
-/** Loose inputs the model must tolerate (tests pass `null`, `undefined` and numbers). */
-type LooseInput = string | number | null | undefined
-
-export function normalizeWord(_input: LooseInput): string {
-  throw new Error('not implemented')
+export function normalizeWord(word: Loose): string {
+  let s = str(word).trim().toLowerCase()
+  if (!s) { return '' }
+  s = s.replace(/\s+/g, ' ')            // collapse newlines: one tap must never send two commands
+  s = s.replace(/['’]s\b/g, '')    // possessive
+  s = s.replace(/[^\p{L}\p{N} -]/gu, '')
+  s = s.replace(/^[\s-]+|[\s-]+$/g, '')
+  return s
 }
 
-export function normalizeVerb(_input: LooseInput): string {
-  throw new Error('not implemented')
+/** As normalizeWord, but verbs may be multi-word ("turn on"), so inner single spaces survive. */
+export function normalizeVerb(verb: Loose): string {
+  let s = str(verb).trim().toLowerCase()
+  if (!s) { return '' }
+  s = s.replace(/\s+/g, ' ')
+  s = s.replace(/[^\p{L}\p{N} -]/gu, '')
+  s = s.replace(/^[\s-]+|[\s-]+$/g, '')
+  return s
 }
 
-export function tokenize(_input: LooseInput): Token[] {
-  throw new Error('not implemented')
+/**
+ * Split text into ordered tokens, marking which are tappable words. Concatenating token.text
+ * reproduces the input exactly — required so decoration is lossless.
+ */
+export function tokenize(text: Loose): Token[] {
+  const s = str(text)
+  if (s === '') { return [] }
+  const tokens: Token[] = []
+  // A word must start with a letter; bare digits are not useful nouns to tap.
+  const re = /\p{L}[\p{L}\p{N}]*(?:-[\p{L}\p{N}]+)*/gu
+  let last = 0
+  let m: RegExpExecArray | null
+  while ((m = re.exec(s)) !== null) {
+    if (m.index > last) { tokens.push({ text: s.slice(last, m.index), isWord: false }) }
+    tokens.push({ text: m[0], isWord: true })
+    last = m.index + m[0].length
+  }
+  if (last < s.length) { tokens.push({ text: s.slice(last), isWord: false }) }
+  return tokens
 }
 
 export function createState(): CommandState {
-  throw new Error('not implemented')
+  return { pendingVerb: null, pendingNoun: null }
 }
 
-export function clearPending(_state: CommandState): CommandState {
-  throw new Error('not implemented')
+export function clearPending(_state?: CommandState): CommandState {
+  return createState()
 }
 
-export function tapVerb(_state: CommandState, _verb: LooseInput): TapResult {
-  throw new Error('not implemented')
+function result(state: CommandState, command: string | null): TapResult {
+  if (command !== null && command.length > MAX_COMMAND_LENGTH) {
+    // Refuse rather than send a truncated command that would confuse the parser.
+    return { state: createState(), command: null }
+  }
+  return { state, command }
 }
 
-export function tapWord(_state: CommandState, _word: LooseInput): TapResult {
-  throw new Error('not implemented')
+export function tapVerb(state: CommandState, verb: Loose): TapResult {
+  const v = normalizeVerb(verb)
+  if (!v) { return result(state, null) }
+  if (state.pendingNoun) { return result(createState(), v + ' ' + state.pendingNoun) }
+  return result({ pendingVerb: v, pendingNoun: null }, null)
 }
 
-export function tapDirect(_state: CommandState, _command: LooseInput): TapResult {
-  throw new Error('not implemented')
+export function tapWord(state: CommandState, word: Loose): TapResult {
+  const n = normalizeWord(word)
+  if (!n) { return result(state, null) }
+  if (state.pendingVerb) { return result(createState(), state.pendingVerb + ' ' + n) }
+  return result({ pendingVerb: null, pendingNoun: n }, null)
 }
 
-export function addVerb(_list: readonly string[], _verb: LooseInput): string[] {
-  throw new Error('not implemented')
+/** A self-contained command (direction, look, inventory…): send now, drop anything armed. */
+export function tapDirect(_state: CommandState, command: Loose): TapResult {
+  const c = str(command).trim()
+  if (!c) { return result(createState(), null) }
+  return result(createState(), c.replace(/\s+/g, ' '))
 }
 
-export function removeVerb(_list: readonly string[], _verb: LooseInput): string[] {
-  throw new Error('not implemented')
+export function addVerb(list: readonly string[], verb: Loose): string[] {
+  const v = normalizeVerb(verb)
+  const out = list.slice()
+  if (!v || v.length > MAX_VERB_LENGTH || out.length >= MAX_VERBS) { return out }
+  if (out.indexOf(v) !== -1) { return out }
+  out.push(v)
+  return out
+}
+
+export function removeVerb(list: readonly string[], verb: Loose): string[] {
+  const v = normalizeVerb(verb)
+  return list.filter(x => x !== v)
 }
