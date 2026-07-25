@@ -272,6 +272,36 @@ Open **`http://localhost:8080/play.html?story=games/Advent.z5.js`**, or pick the
 
 ---
 
+## Run it as a server (Docker)
+
+If you want a box on your home network that just serves playable IF to a tablet, there is a Dockerfile
+that builds one. It bundles **both** players with the overlay already installed, and serves your own
+story library from a mounted volume:
+
+```bash
+docker build -t glk-touch .
+docker run -p 8080:80 -v /srv/if-stories:/stories:ro glk-touch
+# or:  STORIES=/srv/if-stories docker compose up -d --build
+```
+
+| Path | What |
+|------|------|
+| `/` | a picker listing your library, with the right link per game — read live from the volume, so a game you drop in appears on reload |
+| `/parchment/play.html` | modern Parchment: Z-machine, Glulx, TADS, Hugo and SCARE |
+| `/parchmap/play.html` | Parchmap: adds the automatic map, route-finding and notes |
+
+Two things the container does for you. It **wraps** each Z-machine story into the
+`processBase64Zcode` form Parchmap's legacy core requires, so one library of raw files serves both
+players; and it **injects** your library into Parchmap's own game menu alongside the games it ships
+with. Adventure is included so a bare `docker run` plays immediately.
+
+**Licence, and it matters.** These files are MIT and Parchment is MIT, but Parchmap is GPL-3.0, so the
+default image is a combined work conveyed under **GPL-3.0** — which is precisely why this addon is MIT
+rather than GPL: MIT is GPL-compatible, so the combination is lawful and these files stay MIT within it.
+Every upstream licence is copied to `/licences` in the image. For a purely MIT artifact, build with
+`--build-arg WITH_PARCHMAP=0` — that leaves Parchmap out of every layer (~200MB rather than ~385MB),
+losing only the map.
+
 ## Using it
 
 The bar has three parts, left to right.

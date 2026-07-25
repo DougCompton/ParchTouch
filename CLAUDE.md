@@ -138,6 +138,27 @@ it, 11 verb-persistence tests either crash or — worse — pass **vacuously**, 
 `Storage.prototype`. An explicit `--pool=threads` on the command line overrides the config and breaks
 them; use plain `npm test`.
 
+## Docker (deployment image)
+
+`Dockerfile` + `docker/` build a playable server: both players with the overlay installed, library on a
+volume at `/stories`. Distinct from `harness/docker-compose.yml`, which is the local dev harness.
+
+Things that bit and must not be undone:
+
+- **Parchment is built from SOURCE with `--recurse-submodules`.** asyncglk/emglken/glkote/ifvms/quixe
+  are submodules; without them the build dies on `Could not resolve "../upstream/asyncglk/…"`. Release
+  assets are no use — one is a legacy build, the other a single 5MB HTML file. `npm ci` fails too:
+  upstream ships no lockfile.
+- **Never add a `types { }` block to `docker/nginx.conf`.** Inside `server` it REPLACES the inherited
+  MIME map rather than extending it, which stripped the type from everything and made the browser
+  download the front page. nginx's own mime.types already maps wasm.
+- **`WITH_PARCHMAP=0` selects an empty stand-in STAGE**, it does not `rm -rf` later. Deleting in a later
+  layer left the GPL files in an earlier one — the image still carried them while claiming MIT, and was
+  not a byte smaller. Verify with `docker run --rm --entrypoint sh glk-touch -c 'find / -name "Parchmap*"'`.
+- `docker/prepare.mjs` wraps Z-machine stories for Parchmap and regenerates its `GameList.js` by
+  APPENDING to a pristine `GameList.bundled.js` copy, so no parsing of upstream JS is involved.
+- The image build is deliberately NOT in `scripts/ci.sh`: it needs network and takes minutes.
+
 ## Local harness (real-host verification)
 
 `harness/` runs real Parchment and Parchmap against the **built bundle** (never the ESM sources), so

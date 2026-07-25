@@ -1,0 +1,41 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>Parchment + glk-touch</title>
+
+<!--
+  A minimal play page: no story picker of its own, because the container's front page is the picker.
+  Same shape as the harness page the end-to-end suite drives, so what ships is what is tested.
+
+  The story comes from this page's OWN ?story= query parameter, which the current Parchment build reads
+  itself. The older parchment_options keys (default_story, lock_story, lock_options, story_name) no
+  longer exist in it. Only options that still exist are set here.
+-->
+<script>
+window.parchment_options = {
+  use_proxy: 0,          // the library is same-origin, so never route it through the CORS proxy
+  do_vm_autosave: 1      // resume where you left off
+}
+</script>
+
+<link rel="stylesheet" href="dist/web/web.css">
+<link rel="stylesheet" href="../dist/glk-touch.css">
+</head>
+<body>
+<div id="gameport">
+  <div id="about"></div>
+  <div id="windowport"></div>
+  <div id="loadingpane" style="display:none"><em>Loading…</em></div>
+  <div id="errorpane" style="display:none"><div id="errorcontent"></div></div>
+</div>
+
+<script src="dist/web/jquery.min.js"></script>
+<script src="dist/web/ie.js" nomodule></script>
+<script src="dist/web/web.js" type="module"></script>
+
+<!-- glk-touch: last, after the host's scripts. web.js is a module, so this never joins its graph. -->
+<script src="../dist/glk-touch.js"></script>
+</body>
+</html>

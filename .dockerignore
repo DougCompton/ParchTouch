@@ -1,0 +1,10 @@
+# Keep the build context small and reproducible: everything the image needs is fetched or built.
+.git
+node_modules
+harness/vendor
+harness/stories
+test-results
+playwright-report
+.claude
+dist/*.map
+*.log

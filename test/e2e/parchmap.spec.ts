@@ -194,13 +194,19 @@ test.describe('real Parchmap (legacy core + auto-map)', () => {
     })
     await expect(page.locator('#ifb-bar .ifb-verb').filter({ hasText: '/map' })).toHaveCount(1)
 
+    // The slash survives normalization — asserted on the stored word, which is not racy.
+    expect(await page.evaluate(() => window.IFButtons.loadVerbs())).toContain('/map')
+
     const before = await echoedViaLocators(page)
     await page.locator('#ifb-bar .ifb-verb').filter({ hasText: '/map' }).click()
-    // Staged with the slash intact...
-    await expect(page.locator('.Input.LineInput')).toHaveValue('/map')
 
-    // ...then the host claims it: it clears its own field, and the game never sees the text.
-    await expect(page.locator('.Input.LineInput')).toHaveValue('', { timeout: 5000 })
+    /*
+     * Deliberately NOT asserting that the field momentarily holds "/map". The host polls every 200ms
+     * and clears the field as soon as it claims the command, so that intermediate state may already be
+     * gone by the time an assertion runs — a race that failed in WebKit. What matters is the outcome:
+     * the host took the text, and the game never saw it.
+     */
+    await expect(page.locator('.Input.LineInput')).toHaveValue('', { timeout: 8000 })
     expect(await echoedViaLocators(page)).toEqual(before)
 
     await page.evaluate(() => window.IFButtons.resetVerbs())

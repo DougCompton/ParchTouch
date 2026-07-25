@@ -1,0 +1,181 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>Story library — glk-touch</title>
+
+<!--
+  The picker. Neither bundled player has a library browser for a mounted volume, so this is it.
+  It reads the library live from nginx's JSON directory index, which means a game dropped into the
+  volume appears on reload with no container restart.
+
+  It also hides the difference between the two players, which is otherwise a trap:
+    Parchment  needs a PATH, not a bare filename — a bare one crashes its loading pane
+    Parchmap   needs the JS-wrapped copy the entrypoint writes, at games/<name>.js
+  Z-machine only for Parchmap: its bundled core loads zcode, so a Glulx or TADS game is
+  Parchment-only and says so, rather than offering a link that would fail.
+-->
+<style>
+  :root { color-scheme: dark light; --bg:#141414; --fg:#eee; --dim:#9a9a9a; --line:#333; --accent:#4c9be8; }
+  @media (prefers-color-scheme: light) {
+    :root { --bg:#fbfbfa; --fg:#1a1a1a; --dim:#666; --line:#ddd; --accent:#0a63c2; }
+  }
+  * { box-sizing: border-box; }
+  body {
+    margin: 0; padding: 24px 16px 48px; background: var(--bg); color: var(--fg);
+    font: 16px/1.5 system-ui, -apple-system, "Segoe UI", sans-serif;
+  }
+  main { max-width: 60rem; margin: 0 auto; }
+  h1 { font-size: 1.4rem; margin: 0 0 .25em; }
+  .sub { color: var(--dim); margin: 0 0 1.5em; font-size: .9rem; }
+  ul { list-style: none; margin: 0; padding: 0; }
+  li {
+    display: flex; flex-wrap: wrap; gap: 10px; align-items: center;
+    padding: 10px 0; border-bottom: 1px solid var(--line);
+  }
+  .name { flex: 1 1 14rem; min-width: 0; }
+  .name b { font-weight: 600; }
+  .file { display: block; color: var(--dim); font-size: .78rem; word-break: break-all; }
+  a.play {
+    flex: 0 0 auto; min-height: 44px; display: inline-flex; align-items: center;
+    padding: 6px 14px; border: 1px solid var(--accent); border-radius: 8px;
+    color: var(--accent); text-decoration: none; font-size: .9rem;
+  }
+  a.play:hover, a.play:focus-visible { background: var(--accent); color: var(--bg); }
+  .only { flex: 0 0 auto; color: var(--dim); font-size: .8rem; }
+  .empty, .err { padding: 16px; border: 1px dashed var(--line); border-radius: 8px; color: var(--dim); }
+  code { background: rgba(127,127,127,.18); padding: .1em .35em; border-radius: 4px; }
+  footer { margin-top: 2rem; color: var(--dim); font-size: .8rem; }
+  footer a { color: var(--accent); }
+</style>
+</head>
+<body>
+<main>
+  <h1>Story library</h1>
+  <p class="sub" id="sub">Reading your library…</p>
+  <div id="out"></div>
+
+  <footer>
+    <p>
+      Tap a compass direction to move. Tap a word in the story text, then a verb — or the other way
+      round — and press <b>↵</b> to send it. <b>⚙</b> edits the word list.
+    </p>
+    <p id="licences"></p>
+  </footer>
+</main>
+
+<script>
+(function () {
+  var ZCODE = ['.z1','.z2','.z3','.z4','.z5','.z6','.z7','.z8','.zblorb','.zlb','.blb']
+  var out = document.getElementById('out')
+  var sub = document.getElementById('sub')
+
+  function ext(name) {
+    var i = name.lastIndexOf('.')
+    return i === -1 ? '' : name.slice(i).toLowerCase()
+  }
+  function isZcode(name) { return ZCODE.indexOf(ext(name)) !== -1 }
+
+  // "TheLurkingHorror.z3" -> "The Lurking Horror"
+  function title(name) {
+    var stem = name.replace(/\.[^.]+$/, '').replace(/\.(z[1-8]|zblorb|zlb|blb)$/i, '')
+    var t = stem.replace(/[_-]+/g, ' ').replace(/([a-z\d])([A-Z])/g, '$1 $2').replace(/\s+/g, ' ').trim()
+    return t || stem
+  }
+
+  function link(href, label) {
+    var a = document.createElement('a')
+    a.className = 'play'
+    a.href = href
+    a.textContent = label
+    return a
+  }
+
+  function render(names, hasParchmap) {
+    if (names.length === 0) {
+      out.innerHTML = ''
+      var e = document.createElement('div')
+      e.className = 'empty'
+      e.innerHTML = 'No stories found. Mount a directory of story files at <code>/stories</code>:'
+        + '<br><code>docker run -p 8080:80 -v /srv/if-stories:/stories:ro glk-touch</code>'
+      out.appendChild(e)
+      sub.textContent = 'Nothing in the library yet.'
+      return
+    }
+
+    var ul = document.createElement('ul')
+    names.forEach(function (name) {
+      var li = document.createElement('li')
+
+      var n = document.createElement('span')
+      n.className = 'name'
+      var b = document.createElement('b')
+      b.textContent = title(name)              // textContent: a filename is untrusted
+      var f = document.createElement('span')
+      f.className = 'file'
+      f.textContent = name
+      n.appendChild(b); n.appendChild(f)
+      li.appendChild(n)
+
+      // Parchment plays everything it has an engine for, and needs a PATH not a bare filename.
+      li.appendChild(link('parchment/play.html?story=../stories/' + encodeURIComponent(name), 'Parchment'))
+
+      if (hasParchmap && isZcode(name)) {
+        // The entrypoint wrote the wrapped copy this points at.
+        li.appendChild(link('parchmap/play.html?story=games/' + encodeURIComponent(name) + '.js', 'Parchmap + map'))
+      } else if (hasParchmap) {
+        var only = document.createElement('span')
+        only.className = 'only'
+        only.textContent = 'Parchment only (not a Z-machine story)'
+        li.appendChild(only)
+      }
+
+      ul.appendChild(li)
+    })
+    out.innerHTML = ''
+    out.appendChild(ul)
+    sub.textContent = names.length + (names.length === 1 ? ' game' : ' games')
+      + ' — reload this page after adding more.'
+  }
+
+  function fail(why) {
+    out.innerHTML = ''
+    var d = document.createElement('div')
+    d.className = 'err'
+    d.textContent = 'Could not read the library (' + why + '). '
+    var a = document.createElement('a')
+    a.href = 'stories/'
+    a.textContent = 'Browse /stories/ directly'
+    d.appendChild(a)
+    out.appendChild(d)
+    sub.textContent = ''
+  }
+
+  // Is Parchmap in this image? It is dropped when built with WITH_PARCHMAP=0.
+  function probeParchmap() {
+    return fetch('parchmap/play.html', { method: 'HEAD' })
+      .then(function (r) { return r.ok })
+      .catch(function () { return false })
+  }
+
+  Promise.all([
+    fetch('stories/', { headers: { Accept: 'application/json' } }).then(function (r) {
+      if (!r.ok) { throw new Error('HTTP ' + r.status) }
+      return r.json()
+    }),
+    probeParchmap(),
+  ]).then(function (res) {
+    var names = res[0].map(function (e) { return e.name })
+      .filter(function (n) { return n && n.charAt(0) !== '.' })
+      .sort(function (a, b) { return a.localeCompare(b) })
+    render(names, res[1])
+    document.getElementById('licences').innerHTML = res[1]
+      ? 'glk-touch and Parchment are MIT; Parchmap is GPL-3.0, so this image as a whole is conveyed '
+        + 'under GPL-3.0. Licences are in <code>/licences</code> in the container.'
+      : 'glk-touch and Parchment are both MIT. Licences are in <code>/licences</code> in the container.'
+  }).catch(function (err) { fail(err.message || String(err)) })
+})()
+</script>
+</body>
+</html>
