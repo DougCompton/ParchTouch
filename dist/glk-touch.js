@@ -581,6 +581,7 @@
       el.style.removeProperty("max-height");
       el.style.removeProperty("bottom");
       el.style.removeProperty("top");
+      el.style.removeProperty("overflow-y");
       el.removeAttribute("data-ifb-lifted");
     }
     if (barHeight <= 0) {
@@ -616,6 +617,18 @@
           el.style.setProperty("bottom", Math.round((Number.isFinite(bottom) ? bottom : 0) + barHeight) + "px", "important");
         }
         el.setAttribute("data-ifb-lifted", "1");
+      } catch (e) {
+      }
+    }
+    for (const el of document.querySelectorAll("[data-ifb-lifted]")) {
+      try {
+        if (window.getComputedStyle(el).overflowY !== "visible") {
+          continue;
+        }
+        if (el.scrollHeight <= el.clientHeight + 2) {
+          continue;
+        }
+        el.style.setProperty("overflow-y", "auto", "important");
       } catch (e) {
       }
     }

@@ -146,6 +146,38 @@ test.describe('real Parchmap (legacy core + auto-map)', () => {
     }
   })
 
+  test('the map scrolls its own content instead of spilling over the bar', async ({ page }) => {
+    /*
+     * Shortening the map panel is only half the job. Its room list is taller than the shortened panel,
+     * and because the host leaves the panel's overflow visible that list painted 67px straight over the
+     * bar even though the panel itself ended exactly at the bar's top edge. The panel has to scroll its
+     * own overflow so the list stays reachable.
+     */
+    await expect.poll(() => rooms(page).count(), { timeout: 30_000 }).toBeGreaterThan(0)
+    await control(page, 'ifb-move', 'E').click()
+    await page.waitForTimeout(1500)
+
+    const m = await page.evaluate(() => {
+      const bar = document.getElementById('ifb-bar')!.getBoundingClientRect()
+      const map = document.querySelector<HTMLElement>('#map')
+      const list = document.querySelector<HTMLElement>('#rooms-list')
+      if (!map) { return null }
+      return {
+        mapBottomVsBar: Math.round(map.getBoundingClientRect().bottom - bar.top),
+        mapOverflowY: getComputedStyle(map).overflowY,
+        mapContentOverflows: map.scrollHeight > map.clientHeight + 2,
+        listSpill: list ? Math.round(list.getBoundingClientRect().bottom - bar.top) : 0,
+      }
+    })
+    expect(m).not.toBeNull()
+    // The panel itself stops at the bar.
+    expect(m!.mapBottomVsBar).toBeLessThanOrEqual(1)
+    // And when its content is taller than it is, it scrolls rather than painting over the bar.
+    if (m!.mapContentOverflows || m!.listSpill > 1) {
+      expect(m!.mapOverflowY).not.toBe('visible')
+    }
+  })
+
   test('the map toggle collapses and restores the map (P6-AC4)', async ({ page }) => {
     const toggle = page.locator('#ifb-bar .ifb-maptoggle')
     await expect(page.locator('#map')).toBeVisible()

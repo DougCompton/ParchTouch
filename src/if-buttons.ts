@@ -678,6 +678,7 @@ function reserveViewportBottom(barTop: number, barHeight: number): void {
     el.style.removeProperty('max-height')
     el.style.removeProperty('bottom')
     el.style.removeProperty('top')
+    el.style.removeProperty('overflow-y')
     el.removeAttribute('data-ifb-lifted')
   }
   if (barHeight <= 0) { return }
@@ -710,6 +711,26 @@ function reserveViewportBottom(barTop: number, barHeight: number): void {
       el.setAttribute('data-ifb-lifted', '1')
     } catch {
       // A host layout we cannot adjust is left alone. Degrade, never throw (§0.2).
+    }
+  }
+
+  /*
+   * Shortening a panel is only half the job. If its content is taller than the panel and the panel does
+   * not clip, that content paints straight over the bar anyway — a map host's room list did exactly
+   * this, spilling 67px past a correctly-shortened map. Letting the panel scroll its own overflow keeps
+   * the content reachable instead of hiding it.
+   *
+   * Must be a SECOND pass: clientHeight only reflects the new height after the cap above is applied.
+   * Only touched when the host left overflow visible, so a deliberate `hidden` or an existing scroller
+   * is never overridden.
+   */
+  for (const el of document.querySelectorAll<HTMLElement>('[data-ifb-lifted]')) {
+    try {
+      if (window.getComputedStyle(el).overflowY !== 'visible') { continue }
+      if (el.scrollHeight <= el.clientHeight + 2) { continue }
+      el.style.setProperty('overflow-y', 'auto', 'important')
+    } catch {
+      // As above: leave a layout we cannot help exactly as it was.
     }
   }
 }
