@@ -2167,7 +2167,7 @@ over HTTP.
 
 ### Tasks
 
-- [ ] **Task 4.1: Harness documentation**
+- [x] **Task 4.1: Harness documentation**
 
   File: `harness/README.md`
 
@@ -2280,7 +2280,7 @@ over HTTP.
   > `dist` currency gate (Task 7.3) does not fail on it: the released bundle is built by
   > `scripts/build.sh`, which emits no map.
 
-- [ ] **Task 4.3: Minimal Parchment host page**
+- [x] **Task 4.3: Minimal Parchment host page**
 
   File: `harness/parchment/play.html`
 
@@ -2346,7 +2346,7 @@ over HTTP.
   This edit lives in the git-ignored `vendor/` tree — the harness never commits a modified host.
   Downstream deployments make the same change; see `docs/INSTALL.md`.
 
-- [ ] **Task 4.5: Commit**
+- [x] **Task 4.5: Commit**
 
   ```bash
   git add harness/
@@ -2604,7 +2604,7 @@ same output. These checks are the crux of the "works with Parchmap" claim.
 
 ### Tasks
 
-- [ ] **Task 7.1: Build script**
+- [x] **Task 7.1: Build script**
 
   File: `scripts/build.sh`
 
@@ -2639,7 +2639,7 @@ same output. These checks are the crux of the "works with Parchmap" claim.
   echo "built dist/glk-touch.js and dist/glk-touch.css"
   ```
 
-- [ ] **Task 7.2: Independence gate**
+- [x] **Task 7.2: Independence gate**
 
   File: `scripts/check-independence.sh`
 
@@ -2659,7 +2659,7 @@ same output. These checks are the crux of the "works with Parchmap" claim.
   > `Navigator` is on the list as a host global. If a legitimate DOM use of `navigator` is ever needed,
   > the lowercase form does not match this word-boundary pattern, so no exception is required.
 
-- [ ] **Task 7.3: Forge-agnostic CI runner**
+- [x] **Task 7.3: Forge-agnostic CI runner**
 
   File: `scripts/ci.sh`
 
@@ -2696,7 +2696,7 @@ same output. These checks are the crux of the "works with Parchmap" claim.
   Run: `sh scripts/ci.sh`
   Expected: ends with `ALL GATES PASSED`.
 
-- [ ] **Task 7.4: Install documentation**
+- [x] **Task 7.4: Install documentation**
 
   File: `docs/INSTALL.md`
 
@@ -2757,7 +2757,7 @@ same output. These checks are the crux of the "works with Parchmap" claim.
   | `'char'` | the game wants a single keypress, not a command |
   ```
 
-- [ ] **Task 7.5: README**
+- [x] **Task 7.5: README**
 
   File: `README.md` — cover, in this order: one-sentence description; the two-tag install; the
   tap-a-verb-then-a-word interaction in three lines; verified hosts (link `docs/COMPATIBILITY.md`);
@@ -2798,12 +2798,12 @@ same output. These checks are the crux of the "works with Parchmap" claim.
 
 ## Phase Final: Quality Gate
 
-- [ ] **Task F.1: Typecheck**
+- [x] **Task F.1: Typecheck**
 
   Run: `npm run typecheck`
   Expected: zero errors.
 
-- [ ] **Task F.2: Full test suite**
+- [x] **Task F.2: Full test suite**
 
   Run: `npm test`
   Expected: all PASS, zero failures, zero skipped.
@@ -2816,7 +2816,7 @@ same output. These checks are the crux of the "works with Parchmap" claim.
   Then confirm empirically: load the Parchment harness page (no Parchmap scripts present) and play a
   full turn by tapping only.
 
-- [ ] **Task F.4: All gates in one run**
+- [x] **Task F.4: All gates in one run**
 
   Run: `sh scripts/ci.sh`
   Expected: ends with `ALL GATES PASSED` — this also proves `dist/` is current and import-free.
