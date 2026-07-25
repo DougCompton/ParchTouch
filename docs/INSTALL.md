@@ -74,6 +74,8 @@ can finish by tapping a word and then typing the `;` — or add the whole thing 
 A tap **stages** text into the input box without sending it; press **↵** to send.
 
 - No object needed: tap `Look`, then **↵**.
+- With a **direction** as the object: tap `Look`, then a compass button — that pair is sent at once,
+  so `Look` then `N` sends `look north`. Directions never need **↵**.
 - With an object: tap `Take`, then the object's word **in the story text** — either order works, so
   tapping the word first and the verb second composes the same command.
 - The list scrolls when it does not fit. The bar is never taller than three buttons.

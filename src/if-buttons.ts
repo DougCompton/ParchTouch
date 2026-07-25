@@ -9,8 +9,9 @@
  *
  * THE INTERACTION MODEL, left to right across the bar:
  *   .ifb-moves    the direction pad. Directions SEND immediately — movement is wanted every turn and
- *                 is unambiguous, so confirming it would double the taps for the commonest action. Its
- *                 centre is ↵ (send what is staged) and its corner the settings gear.
+ *                 is unambiguous, so confirming it would double the taps for the commonest action. With
+ *                 a verb armed the direction is that verb's OBJECT and the pair is sent, so Look then N
+ *                 is `look north`. Its centre is ↵ (send what is staged) and its corner the gear.
  *   .ifb-verbs    one editable list holding every other word, from `look` to `take`. A tap STAGES text
  *                 into the host's input and sends nothing; the player reviews it and presses ↵. Verb
  *                 and noun pair in either order — tap Examine then a word, or a word then Examine.
@@ -61,6 +62,7 @@ export interface DebugHandle {
   stageCommand: typeof stageCommand
   cancelPending: typeof cancelPending
   pressEnter: typeof pressEnter
+  tapDirection: typeof tapDirection
   dismissMorePrompt: typeof dismissMorePrompt
   decorateBuffer: typeof decorateBuffer
   watchBuffer: typeof watchBuffer
@@ -308,6 +310,26 @@ export function cancelPending(): void {
  *            pressing ↵.
  */
 type Delivery = 'send' | 'stage'
+
+/**
+ * A tap on the direction pad.
+ *
+ * With a verb armed, the direction is that verb's OBJECT, not a movement command: tapping Look then N
+ * means `look north`. It used to mean plain `north`, because tapDirect() is defined to drop anything
+ * armed — correct when Look was itself a direct command, but silently destructive now that every word
+ * is staged and waiting for something to complete it.
+ *
+ * Either way it SENDS at once. A direction is wanted every turn and is unambiguous, so it is the one
+ * thing not worth confirming; routing through tapWord() keeps the verb+object pairing rules in the
+ * model rather than duplicating them here.
+ */
+export function tapDirection(direction: string): void {
+  if (state.pendingVerb !== null) {
+    apply(tapWord(state, direction), null, 'send')
+    return
+  }
+  apply(tapDirect(state, direction), null, 'send')
+}
 
 function apply(res: TapResult, armEl: HTMLElement | null, delivery: Delivery): void {
   state = res.state
@@ -825,7 +847,7 @@ export function buildBar(): HTMLElement {
   const moves = document.createElement('div')
   moves.className = 'ifb-group ifb-moves'
   for (const [label, cmd] of MOVES) {
-    moves.appendChild(button(label, 'ifb-move', () => apply(tapDirect(state, cmd), null, 'send')))
+    moves.appendChild(button(label, 'ifb-move', () => { tapDirection(cmd) }))
   }
   // Labelled with the return glyph, not the word "Enter": `enter` is also one of the default VERBS
   // (go in / board), and two adjacent buttons reading "Enter" with different behaviour is a trap.
@@ -1052,7 +1074,7 @@ export function currentState(): CommandState { return state }
 // Console debugging handle ONLY (the troubleshooting docs use `IFButtons.inputMode()`). Never the
 // interface between our own modules — those use ESM imports.
 window.IFButtons = {
-  findLineInput, inputMode, submitCommand, stageCommand, cancelPending, pressEnter,
+  findLineInput, inputMode, submitCommand, stageCommand, cancelPending, pressEnter, tapDirection,
   dismissMorePrompt, decorateBuffer, watchBuffer,
   buildBar, adoptHostFeatures, measureBar, loadVerbs, saveVerbs, resetVerbs, addVerbFromUI,
   removeVerbFromUI, moveVerbFromUI, selectVerb, selectedVerbName, moveSelected, deleteSelected,

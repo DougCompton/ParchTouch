@@ -687,6 +687,28 @@ test('the move and delete actions live in that top row', async ({ page }) => {
   await page.evaluate(() => window.IFButtons.resetVerbs())
 })
 
+test('a verb then a direction sends the pair, not a bare direction', async ({ page }) => {
+  // Reported bug: tapping Look then N went north and discarded the verb.
+  await page.evaluate(() => {
+    window.SYN.reset()
+    window.IFButtons.saveVerbs(['look', 'take'])
+    window.IFButtons.renderVerbs()
+  })
+  await tapVerb(page, 'Look')
+  expect(await page.inputValue('.Input.LineInput')).toBe('look')
+  expect(await page.evaluate(() => window.SYN.submitted())).toEqual([])
+
+  await tapControl(page, 'ifb-move', 'N')
+  // Composed and sent on the spot — no return key needed for a direction.
+  expect(await page.evaluate(() => window.SYN.submitted())).toEqual(['look north'])
+  await expect(page.locator('.ifb-armed')).toHaveCount(0)
+
+  // And the next direction is plain movement again.
+  await tapControl(page, 'ifb-move', 'S')
+  expect(await page.evaluate(() => window.SYN.submitted())).toEqual(['look north', 'south'])
+  await page.evaluate(() => window.IFButtons.resetVerbs())
+})
+
 test('the page raised no uncaught errors', async ({ page }) => {
   await tapControl(page, 'ifb-move', 'N')
   await tapVerb(page, 'Take')

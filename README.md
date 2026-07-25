@@ -287,6 +287,8 @@ SW   S   SE   ⚙
 
 - **↵** sends whatever is currently in the input box. It also advances a *press any key* prompt and
   dismisses a `-- more --` pager, which is what to reach for when a tap seems to do nothing.
+- With a word already selected, a direction becomes its object: `Look` then `N` sends `look north`.
+  Directions are always sent at once, so they never need **↵**.
 - **⚙** opens settings, which **takes the place of the buttons** so it has room; its **✕ Close**
   button brings them back. There you can add a word, and **tap a word to select it** then use
   **◀ ▶** to reorder or **Delete** to remove it. You can also just **drag a word** to a new position,

@@ -303,6 +303,13 @@
     renderArmed(null);
     stageCommand("");
   }
+  function tapDirection(direction) {
+    if (state.pendingVerb !== null) {
+      apply(tapWord(state, direction), null, "send");
+      return;
+    }
+    apply(tapDirect(state, direction), null, "send");
+  }
   function apply(res, armEl, delivery) {
     var _a, _b;
     state = res.state;
@@ -759,7 +766,9 @@
     const moves = document.createElement("div");
     moves.className = "ifb-group ifb-moves";
     for (const [label, cmd] of MOVES) {
-      moves.appendChild(button(label, "ifb-move", () => apply(tapDirect(state, cmd), null, "send")));
+      moves.appendChild(button(label, "ifb-move", () => {
+        tapDirection(cmd);
+      }));
     }
     moves.appendChild(button(
       "\u21B5",
@@ -938,6 +947,7 @@
     stageCommand,
     cancelPending,
     pressEnter,
+    tapDirection,
     dismissMorePrompt,
     decorateBuffer,
     watchBuffer,

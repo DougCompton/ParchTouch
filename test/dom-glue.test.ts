@@ -667,6 +667,116 @@ describe('settings editor', () => {
   })
 })
 
+describe('a verb followed by a direction', () => {
+  let glue: Glue
+  beforeEach(async () => {
+    localStorage.clear()
+    glue = await loadGlue()
+  })
+
+  const north = () => [...document.querySelectorAll<HTMLButtonElement>('#ifb-bar .ifb-move')]
+    .find(b => b.textContent === 'N')
+  const verb = (v: string) => [...document.querySelectorAll<HTMLButtonElement>('#ifb-bar .ifb-verb')]
+    .find(b => (b.textContent ?? '').toLowerCase() === v)
+
+  it('composes "look north" and sends it, rather than going north', () => {
+    // The reported bug: tapping Look then N sent a bare "north" and threw the verb away, because a
+    // direction is defined to drop anything armed.
+    makeBuffer(['x'], { withInput: true })
+    glue.saveVerbs(['look'])
+    glue.buildBar()
+    const input = liveInput()
+    const sent: string[] = []
+    input.addEventListener('keypress', () => sent.push(input.value))
+
+    verb('look')?.click()
+    expect(input.value).toBe('look')      // staged, nothing sent yet
+    expect(sent).toEqual([])
+
+    north()?.click()
+    expect(sent).toEqual(['look north'])  // composed AND sent, with no return key
+  })
+
+  it('clears the armed state afterwards, so the next direction is plain movement', () => {
+    makeBuffer(['x'], { withInput: true })
+    glue.saveVerbs(['look'])
+    glue.buildBar()
+    const input = liveInput()
+    const sent: string[] = []
+    input.addEventListener('keypress', () => sent.push(input.value))
+
+    verb('look')?.click()
+    north()?.click()
+    north()?.click()
+    expect(sent).toEqual(['look north', 'north'])
+    expect(glue.currentState().pendingVerb).toBe(null)
+    expect(document.querySelectorAll('.ifb-armed').length).toBe(0)
+  })
+
+  it('a direction with nothing armed still sends plain movement', () => {
+    makeBuffer(['x'], { withInput: true })
+    glue.buildBar()
+    const input = liveInput()
+    const sent: string[] = []
+    input.addEventListener('keypress', () => sent.push(input.value))
+    north()?.click()
+    expect(sent).toEqual(['north'])
+  })
+
+  it('works for every direction, and uses the full word', () => {
+    makeBuffer(['x'], { withInput: true })
+    glue.saveVerbs(['look'])
+    glue.buildBar()
+    const input = liveInput()
+    const sent: string[] = []
+    input.addEventListener('keypress', () => sent.push(input.value))
+    for (const [label, word] of [['NW', 'northwest'], ['SE', 'southeast'], ['Up', 'up']] as const) {
+      verb('look')?.click()
+      ;[...document.querySelectorAll<HTMLButtonElement>('#ifb-bar .ifb-move')]
+        .find(b => b.textContent === label)?.click()
+      expect(sent[sent.length - 1]).toBe('look ' + word)
+    }
+  })
+
+  it('a multi-word verb composes too', () => {
+    makeBuffer(['x'], { withInput: true })
+    glue.saveVerbs(['turn on'])
+    glue.buildBar()
+    const input = liveInput()
+    const sent: string[] = []
+    input.addEventListener('keypress', () => sent.push(input.value))
+    verb('turn on')?.click()
+    north()?.click()
+    expect(sent).toEqual(['turn on north'])
+  })
+
+  it('a slash command composes with a direction as well', () => {
+    makeBuffer(['x'], { withInput: true })
+    glue.saveVerbs(['/goto'])
+    glue.buildBar()
+    const input = liveInput()
+    const sent: string[] = []
+    input.addEventListener('keypress', () => sent.push(input.value))
+    document.querySelector<HTMLButtonElement>('#ifb-bar .ifb-verb')?.click()
+    north()?.click()
+    expect(sent).toEqual(['/goto north'])
+  })
+
+  it('with only a NOUN armed, a direction is still plain movement', () => {
+    // "north lamp" would be nonsense, so the direction wins and the pending noun is dropped.
+    const bw = makeBuffer(['a lamp'], { withInput: true })
+    glue.decorateBuffer(bw)
+    glue.buildBar()
+    const input = liveInput()
+    const sent: string[] = []
+    input.addEventListener('keypress', () => sent.push(input.value))
+    bw.querySelector<HTMLElement>('.ifb-word')?.click()   // arms the noun
+    north()?.click()
+    expect(sent).toEqual(['north'])
+    expect(glue.currentState().pendingNoun).toBe(null)
+  })
+})
+
 describe('host commands beginning with a slash', () => {
   let glue: Glue
   beforeEach(async () => {
