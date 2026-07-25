@@ -2826,7 +2826,7 @@ same output. These checks are the crux of the "works with Parchmap" claim.
   Re-run the Phase 5.2 and Phase 6.4 checklists against the harness. Expected: all steps pass, and
   `docs/COMPATIBILITY.md` has no unfilled `<placeholders>`.
 
-- [ ] **Task F.6: Final commit**
+- [x] **Task F.6: Final commit**
 
   ```bash
   git add -A
