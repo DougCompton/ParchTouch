@@ -1,0 +1,14 @@
+# Local-only harness. Serves both hosts, the addon (as the built bundle) and the story directory from
+# ONE origin, so Parchment never engages its CORS proxy.
+services:
+  harness:
+    image: nginx:alpine
+    ports:
+      - "8080:80"
+    volumes:
+      - ./nginx.conf:/etc/nginx/conf.d/default.conf:ro
+      - ./vendor/parchment:/usr/share/nginx/html/parchment-vendor:ro
+      - ./vendor/parchmap:/usr/share/nginx/html/parchmap:ro
+      - ./parchment:/usr/share/nginx/html/parchment:ro
+      - ../dist:/usr/share/nginx/html/dist:ro
+      - ./stories:/usr/share/nginx/html/stories:ro

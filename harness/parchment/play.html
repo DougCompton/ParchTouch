@@ -1,0 +1,45 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>Parchment + glk-touch</title>
+
+<!--
+  parchment_options is Parchment's supported config global and MUST be set BEFORE its scripts load.
+  default_story is resolved SAME-ORIGIN (/stories/...), so Parchment never routes the story through
+  its CORS proxy — the harness works offline. ?story= is restricted to a bare filename so this page
+  cannot be turned into a proxy for arbitrary remote files.
+-->
+<script>
+(function () {
+  var raw = new URLSearchParams(location.search).get('story') || ''
+  var safe = /^[A-Za-z0-9 ._'()-]+$/.test(raw) && raw.indexOf('..') === -1 ? raw : ''
+  if (safe) {
+    window.parchment_options = {
+      default_story: ['../stories/' + encodeURIComponent(safe)],
+      lock_story: 1, lock_options: 1, page_title: 0
+    }
+  }
+})()
+</script>
+
+<link rel="stylesheet" href="../parchment-vendor/dist/web/web.css">
+<link rel="stylesheet" href="../dist/glk-touch.css">
+</head>
+<body>
+<div id="gameport">
+  <div id="about"></div>
+  <div id="windowport"></div>
+  <div id="loadingpane" style="display:none"><p>Loading story…</p></div>
+  <div id="errorpane" style="display:none"><div id="errorcontent"></div></div>
+</div>
+
+<script src="../parchment-vendor/dist/web/jquery.min.js"></script>
+<script nomodule src="../parchment-vendor/dist/web/ie.js"></script>
+<script type="module" src="../parchment-vendor/dist/web/web.js"></script>
+
+<!-- the addon: the same single classic script a real deployment installs -->
+<script src="../dist/glk-touch.js"></script>
+</body>
+</html>
