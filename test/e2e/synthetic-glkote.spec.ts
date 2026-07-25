@@ -709,6 +709,54 @@ test('a verb then a direction sends the pair, not a bare direction', async ({ pa
   await page.evaluate(() => window.IFButtons.resetVerbs())
 })
 
+test('layouts keep a separate word list, and survive a reload', async ({ page }) => {
+  await page.evaluate(() => {
+    window.IFButtons.saveVerbs(['take'])
+    window.IFButtons.createLayout('Zork')
+    window.IFButtons.saveVerbs(['dig', 'climb'])
+    window.IFButtons.openEditor()
+  })
+  const picker = page.locator('#ifb-editor .ifb-layoutpicker')
+  await expect(picker).toHaveValue('Zork')
+  await expect(page.locator('#ifb-editor .ifb-verbchip')).toHaveCount(2)
+
+  // Switching layout swaps the strip.
+  await picker.selectOption('Default')
+  expect((await page.locator('#ifb-bar .ifb-verb').allTextContents()).map(v => v.toLowerCase()))
+    .toEqual(['take'])
+
+  // Both the words and the active choice survive a reload.
+  await picker.selectOption('Zork')
+  await page.reload()
+  await page.waitForSelector('#ifb-bar')
+  await page.evaluate(() => window.IFButtons.stopBoot())
+  expect(await page.evaluate(() => window.IFButtons.activeLayout())).toBe('Zork')
+  expect((await page.locator('#ifb-bar .ifb-verb').allTextContents()).map(v => v.toLowerCase()))
+    .toEqual(['dig', 'climb'])
+
+  await page.evaluate(() => {
+    window.IFButtons.deleteActiveLayout()
+    window.IFButtons.resetVerbs()
+  })
+})
+
+test('a layout can be created, renamed and dropped from settings', async ({ page }) => {
+  await page.evaluate(() => window.IFButtons.openEditor())
+  await page.locator('#ifb-editor .ifb-layoutname').fill('Zork')
+  await page.locator('#ifb-editor .ifb-newlayout').click()
+  await expect(page.locator('#ifb-editor .ifb-layoutpicker')).toHaveValue('Zork')
+
+  await page.locator('#ifb-editor .ifb-layoutname').fill('Zork I')
+  await page.locator('#ifb-editor .ifb-renamelayout').click()
+  await expect(page.locator('#ifb-editor .ifb-layoutpicker')).toHaveValue('Zork I')
+
+  await page.locator('#ifb-editor .ifb-droplayout').click()
+  await expect(page.locator('#ifb-editor .ifb-layoutpicker')).toHaveValue('Default')
+  // Only one left, so it can no longer be dropped.
+  await expect(page.locator('#ifb-editor .ifb-droplayout')).toBeDisabled()
+  await page.evaluate(() => window.IFButtons.resetVerbs())
+})
+
 test('the page raised no uncaught errors', async ({ page }) => {
   await tapControl(page, 'ifb-move', 'N')
   await tapVerb(page, 'Take')

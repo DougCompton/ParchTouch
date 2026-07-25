@@ -2,6 +2,9 @@ import { describe, it, expect, beforeEach } from 'vitest'
 import {
   normalizeWord, tokenize, createState, tapVerb, tapWord, tapDirect, clearPending,
   normalizeVerb, addVerb, removeVerb, moveVerb,
+  sanitizeLayouts, emptyLayouts, layoutNames, activeWords, setActiveWords,
+  switchLayout, createLayout, renameLayout, deleteLayout,
+  normalizeLayoutName, MAX_LAYOUTS, MAX_LAYOUT_NAME, DEFAULT_LAYOUT,
   MAX_COMMAND_LENGTH, MAX_VERBS, DEFAULT_VERBS,
   type CommandState,
 } from '../src/command-model'
@@ -261,6 +264,154 @@ describe('host commands beginning with a slash', () => {
   it('a slash command still obeys the length and count limits', () => {
     expect(addVerb([], '/' + 'a'.repeat(200))).toEqual([])
     expect(normalizeVerb('/' + 'a'.repeat(5))).toBe('/aaaaa')
+  })
+})
+
+describe('named layouts', () => {
+  const store = (active: string, sets: Record<string, string[]>) => ({ active, sets })
+
+  describe('normalizeLayoutName', () => {
+    it('trims and collapses whitespace', () => {
+      expect(normalizeLayoutName('  My   Zork  ')).toBe('My Zork')
+    })
+
+    it('keeps letters, digits, spaces and hyphens', () => {
+      expect(normalizeLayoutName('Zork-2 modern')).toBe('Zork-2 modern')
+    })
+
+    it('drops anything that could be markup', () => {
+      expect(normalizeLayoutName('<b>x</b>')).toBe('bxb')
+      expect(normalizeLayoutName('a"b\'c')).toBe('abc')
+    })
+
+    it('bounds the length', () => {
+      expect(normalizeLayoutName('n'.repeat(200))).toHaveLength(MAX_LAYOUT_NAME)
+    })
+
+    it('returns empty for nothing usable', () => {
+      for (const v of ['', '   ', '!!!', '---', null, undefined]) {
+        expect(normalizeLayoutName(v)).toBe('')
+      }
+    })
+  })
+
+  describe('sanitizeLayouts', () => {
+    it('accepts a well-formed store', () => {
+      const s = sanitizeLayouts({ active: 'B', sets: { A: ['take'], B: ['look'] } })
+      expect(layoutNames(s)).toEqual(['A', 'B'])
+      expect(s.active).toBe('B')
+    })
+
+    it('MIGRATES the original bare-array format into the default layout', () => {
+      // A list saved before layouts existed must not be lost.
+      const s = sanitizeLayouts(['take', 'dig'])
+      expect(s.active).toBe(DEFAULT_LAYOUT)
+      expect(activeWords(s)).toEqual(['take', 'dig'])
+    })
+
+    it('falls back to the shipped defaults for junk of every shape', () => {
+      for (const junk of [null, undefined, 42, 'nope', [], [1, 2, 3], {}, { sets: null },
+        { sets: [] }, { sets: { A: 'not an array' } }]) {
+        const s = sanitizeLayouts(junk)
+        expect(layoutNames(s)).toEqual([DEFAULT_LAYOUT])
+        expect(activeWords(s).length).toBeGreaterThan(4)
+      }
+    })
+
+    it('drops unusable layout names and non-string words', () => {
+      const s = sanitizeLayouts({ active: 'A', sets: { A: ['take', 7, null, 'dig'], '!!!': ['x'] } })
+      expect(layoutNames(s)).toEqual(['A'])
+      expect(activeWords(s)).toEqual(['take', 'dig'])
+    })
+
+    it('normalizes the words it keeps', () => {
+      expect(activeWords(sanitizeLayouts({ active: 'A', sets: { A: ['  TAKE ', '/Note!'] } })))
+        .toEqual(['take', '/note'])
+    })
+
+    it('repairs an active name that does not exist', () => {
+      const s = sanitizeLayouts({ active: 'missing', sets: { A: ['take'] } })
+      expect(s.active).toBe('A')
+    })
+
+    it('caps how many layouts it will accept', () => {
+      const sets: Record<string, string[]> = {}
+      for (let i = 0; i < MAX_LAYOUTS + 5; i++) { sets['L' + i] = ['take'] }
+      expect(layoutNames(sanitizeLayouts({ active: 'L0', sets })).length).toBe(MAX_LAYOUTS)
+    })
+
+    it('an empty word list is a valid layout, not junk', () => {
+      const s = sanitizeLayouts({ active: 'A', sets: { A: [] } })
+      expect(layoutNames(s)).toEqual(['A'])
+      expect(activeWords(s)).toEqual([])
+    })
+  })
+
+  describe('changing layouts', () => {
+    it('createLayout adds it, switches to it, and starts from the defaults', () => {
+      const s = createLayout(emptyLayouts(), 'Zork')
+      expect(s.active).toBe('Zork')
+      expect(layoutNames(s)).toEqual([DEFAULT_LAYOUT, 'Zork'])
+      expect(activeWords(s)).toContain('take')      // a copy of the shipped words, never empty
+    })
+
+    it('createLayout refuses a duplicate, an unusable name, or one too many', () => {
+      const one = createLayout(emptyLayouts(), 'Zork')
+      expect(layoutNames(createLayout(one, 'Zork'))).toEqual([DEFAULT_LAYOUT, 'Zork'])
+      expect(layoutNames(createLayout(one, '  '))).toEqual([DEFAULT_LAYOUT, 'Zork'])
+      let full = emptyLayouts()
+      for (let i = 0; i < MAX_LAYOUTS + 3; i++) { full = createLayout(full, 'L' + i) }
+      expect(layoutNames(full).length).toBe(MAX_LAYOUTS)
+    })
+
+    it('switchLayout changes the active one, and ignores an unknown name', () => {
+      const s = createLayout(emptyLayouts(), 'Zork')
+      expect(switchLayout(s, DEFAULT_LAYOUT).active).toBe(DEFAULT_LAYOUT)
+      expect(switchLayout(s, 'nope').active).toBe('Zork')
+    })
+
+    it('setActiveWords only touches the layout in use', () => {
+      const s = setActiveWords(createLayout(store('A', { A: ['take'], B: ['look'] }), 'C'), ['dig'])
+      expect(s.sets['C']).toEqual(['dig'])
+      expect(s.sets['A']).toEqual(['take'])
+      expect(s.sets['B']).toEqual(['look'])
+    })
+
+    it('renameLayout keeps the words and follows the active name', () => {
+      const s = renameLayout(store('A', { A: ['take'], B: ['look'] }), 'A', 'Zork')
+      expect(layoutNames(s)).toEqual(['Zork', 'B'])      // position preserved
+      expect(s.sets['Zork']).toEqual(['take'])
+      expect(s.active).toBe('Zork')
+    })
+
+    it('renameLayout never merges two layouts', () => {
+      const s = store('A', { A: ['take'], B: ['look'] })
+      expect(renameLayout(s, 'A', 'B')).toBe(s)
+      expect(renameLayout(s, 'A', 'A')).toBe(s)
+      expect(renameLayout(s, 'missing', 'X')).toBe(s)
+    })
+
+    it('deleteLayout removes it and picks a survivor as active', () => {
+      const s = deleteLayout(store('A', { A: ['take'], B: ['look'] }), 'A')
+      expect(layoutNames(s)).toEqual(['B'])
+      expect(s.active).toBe('B')
+    })
+
+    it('deleteLayout never removes the last one', () => {
+      const s = store('A', { A: ['take'] })
+      expect(deleteLayout(s, 'A')).toBe(s)
+    })
+
+    it('none of these mutate the store passed in', () => {
+      const original = store('A', { A: ['take'], B: ['look'] })
+      const snapshot = JSON.stringify(original)
+      createLayout(original, 'C')
+      renameLayout(original, 'A', 'Z')
+      deleteLayout(original, 'B')
+      switchLayout(original, 'B')
+      setActiveWords(original, ['dig'])
+      expect(JSON.stringify(original)).toBe(snapshot)
+    })
   })
 })
 

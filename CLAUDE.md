@@ -120,8 +120,11 @@ Behaviours that look incidental but are load-bearing (each has tests):
   attributes keep re-entry idempotent.
 - **Story text only ever goes through text sinks** (`textContent`, `createTextNode`) — never an
   HTML-parsing sink.
-- **`localStorage` (`IFB_Verbs`) access is always wrapped in try/catch** and degrades to
-  `DEFAULT_VERBS` on throw, corrupt data, or non-array data.
+- **Storage is `IFB_Layouts`** — `{ active, sets: { name: words[] } }`, several named layouts rather
+  than one list, because vocabularies differ per game (D3). `IFB_Verbs` is the ORIGINAL key and is
+  still READ so a pre-layouts list migrates into a layout named `Default`; nothing writes it any more.
+  Every access is wrapped in try/catch and `sanitizeLayouts()` coerces anything — junk, corrupt JSON,
+  or the legacy bare array — into a usable store, so the UI can never see a broken shape.
 - **`submitCommand` assigns the field value, never appends,** and does not clear-then-write (the
   extra empty `input` event can trip a host's autocomplete).
 - **The Enter code is carried on `keyCode`, `which` AND `charCode`.** A jQuery host derives `which` for

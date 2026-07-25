@@ -169,6 +169,146 @@ export function removeVerb(list: readonly string[], verb: Loose): string[] {
   return list.filter(x => x !== v)
 }
 
+/*
+ * ── Named layouts ────────────────────────────────────────────────────────────────────────────────
+ *
+ * One word list is not enough: vocabularies differ per game (decision D3), which is the whole reason
+ * the list is editable. A player can keep several named sets — "Zork", "modern" — and switch between
+ * them, rather than re-pruning the same list for every story.
+ *
+ * Layouts are chosen by name rather than derived from the story, deliberately: one set often suits a
+ * whole family of games, and not every host puts a story name in the URL to key off.
+ *
+ * All of this is pure data transformation, so the rules live here and stay testable without a browser.
+ */
+
+/** The whole persisted collection: which layout is in use, and the words in each. */
+export interface LayoutStore {
+  readonly active: string
+  readonly sets: Readonly<Record<string, readonly string[]>>
+}
+
+export const MAX_LAYOUTS = 12
+export const MAX_LAYOUT_NAME = 24
+/** The name a migrated or first-run layout gets. */
+export const DEFAULT_LAYOUT = 'Default'
+
+/**
+ * Layout names are shown on a control and used as storage keys, so they are trimmed, collapsed and
+ * bounded. Letters, digits, spaces and hyphens survive; everything else is dropped, which also means a
+ * name can never carry markup.
+ */
+export function normalizeLayoutName(name: Loose): string {
+  let s = str(name).trim()
+  if (!s) { return '' }
+  s = s.replace(/\s+/g, ' ')
+  s = s.replace(/[^\p{L}\p{N} -]/gu, '')
+  s = s.replace(/^[\s-]+|[\s-]+$/g, '')
+  return s.slice(0, MAX_LAYOUT_NAME)
+}
+
+/** A usable store built from anything at all — unparsed JSON, a legacy array, or junk. */
+export function emptyLayouts(): LayoutStore {
+  return { active: DEFAULT_LAYOUT, sets: { [DEFAULT_LAYOUT]: DEFAULT_VERBS.slice() } }
+}
+
+/**
+ * Coerce unknown data into a valid store, discarding anything malformed.
+ *
+ * Also accepts the ORIGINAL shape — a bare array of words — so a list saved before layouts existed
+ * becomes the default layout instead of being thrown away.
+ */
+export function sanitizeLayouts(raw: unknown): LayoutStore {
+  // The pre-layouts format: just the words.
+  if (Array.isArray(raw)) {
+    const words = raw.filter((v): v is string => typeof v === 'string').map(v => normalizeVerb(v))
+      .filter(v => v !== '')
+    return words.length === 0
+      ? emptyLayouts()
+      : { active: DEFAULT_LAYOUT, sets: { [DEFAULT_LAYOUT]: words } }
+  }
+
+  if (raw === null || typeof raw !== 'object') { return emptyLayouts() }
+  const obj = raw as { active?: unknown; sets?: unknown }
+  if (obj.sets === null || typeof obj.sets !== 'object' || Array.isArray(obj.sets)) {
+    return emptyLayouts()
+  }
+
+  const sets: Record<string, string[]> = {}
+  for (const [rawName, rawWords] of Object.entries(obj.sets as Record<string, unknown>)) {
+    const name = normalizeLayoutName(rawName)
+    if (name === '' || Object.keys(sets).length >= MAX_LAYOUTS) { continue }
+    if (!Array.isArray(rawWords)) { continue }
+    sets[name] = rawWords.filter((v): v is string => typeof v === 'string')
+      .map(v => normalizeVerb(v)).filter(v => v !== '')
+  }
+  if (Object.keys(sets).length === 0) { return emptyLayouts() }
+
+  const wanted = normalizeLayoutName(typeof obj.active === 'string' ? obj.active : '')
+  const active = wanted !== '' && wanted in sets ? wanted : (Object.keys(sets)[0] ?? DEFAULT_LAYOUT)
+  return { active, sets }
+}
+
+/** Names of every layout, in insertion order. */
+export function layoutNames(store: LayoutStore): string[] {
+  return Object.keys(store.sets)
+}
+
+/** The words of the layout in use. */
+export function activeWords(store: LayoutStore): string[] {
+  return (store.sets[store.active] ?? []).slice()
+}
+
+/** Replace the words of the layout in use. */
+export function setActiveWords(store: LayoutStore, words: readonly string[]): LayoutStore {
+  return { active: store.active, sets: { ...store.sets, [store.active]: words.slice() } }
+}
+
+/** Switch to another layout. An unknown name leaves the store untouched. */
+export function switchLayout(store: LayoutStore, name: Loose): LayoutStore {
+  const n = normalizeLayoutName(name)
+  if (n === '' || !(n in store.sets)) { return store }
+  return { active: n, sets: store.sets }
+}
+
+/**
+ * Add a layout and switch to it. New layouts start from the shipped defaults, so a fresh one is never
+ * empty and pruning one game's list cannot surprise you in another.
+ */
+export function createLayout(store: LayoutStore, name: Loose): LayoutStore {
+  const n = normalizeLayoutName(name)
+  if (n === '' || n in store.sets || layoutNames(store).length >= MAX_LAYOUTS) { return store }
+  return { active: n, sets: { ...store.sets, [n]: DEFAULT_VERBS.slice() } }
+}
+
+/** Rename a layout, keeping its position and its words. */
+export function renameLayout(store: LayoutStore, from: Loose, to: Loose): LayoutStore {
+  const a = normalizeLayoutName(from)
+  const b = normalizeLayoutName(to)
+  if (a === '' || b === '' || !(a in store.sets)) { return store }
+  if (a === b) { return store }
+  if (b in store.sets) { return store }            // never silently merge two layouts
+
+  const sets: Record<string, readonly string[]> = {}
+  for (const [name, words] of Object.entries(store.sets)) {
+    sets[name === a ? b : name] = words
+  }
+  return { active: store.active === a ? b : store.active, sets }
+}
+
+/** Remove a layout. The last one is never removed — there must always be something to play with. */
+export function deleteLayout(store: LayoutStore, name: Loose): LayoutStore {
+  const n = normalizeLayoutName(name)
+  if (n === '' || !(n in store.sets) || layoutNames(store).length <= 1) { return store }
+
+  const sets: Record<string, readonly string[]> = {}
+  for (const [key, words] of Object.entries(store.sets)) {
+    if (key !== n) { sets[key] = words }
+  }
+  const active = store.active === n ? (Object.keys(sets)[0] ?? DEFAULT_LAYOUT) : store.active
+  return { active, sets }
+}
+
 /**
  * Move a word to a new position, returning a new list.
  *

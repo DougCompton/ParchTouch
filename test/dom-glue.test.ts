@@ -667,6 +667,142 @@ describe('settings editor', () => {
   })
 })
 
+describe('named layouts', () => {
+  let glue: Glue
+  beforeEach(async () => {
+    localStorage.clear()
+    glue = await loadGlue()
+  })
+
+  it('starts with a single default layout', () => {
+    expect(glue.listLayouts()).toEqual(['Default'])
+    expect(glue.activeLayout()).toBe('Default')
+  })
+
+  it('keeps a separate word list per layout', () => {
+    glue.saveVerbs(['take'])
+    glue.createLayout('Zork')
+    expect(glue.activeLayout()).toBe('Zork')
+    glue.saveVerbs(['dig', 'climb'])
+
+    glue.switchToLayout('Default')
+    expect(glue.loadVerbs()).toEqual(['take'])
+    glue.switchToLayout('Zork')
+    expect(glue.loadVerbs()).toEqual(['dig', 'climb'])
+  })
+
+  it('a new layout starts from the shipped defaults, never empty', () => {
+    glue.saveVerbs(['take'])                 // prune the Default layout right down
+    glue.createLayout('Fresh')
+    expect(glue.loadVerbs().length).toBeGreaterThan(4)
+    expect(glue.loadVerbs()).toContain('look')
+  })
+
+  it('persists which layout is in use, and its words, across a reload', async () => {
+    glue.createLayout('Zork')
+    glue.saveVerbs(['dig'])
+    const again = await loadGlue()
+    expect(again.activeLayout()).toBe('Zork')
+    expect(again.loadVerbs()).toEqual(['dig'])
+    expect(again.listLayouts()).toEqual(['Default', 'Zork'])
+  })
+
+  it('MIGRATES a list saved before layouts existed', async () => {
+    localStorage.clear()
+    localStorage.setItem('IFB_Verbs', JSON.stringify(['take', 'dig']))
+    const again = await loadGlue()
+    expect(again.listLayouts()).toEqual(['Default'])
+    expect(again.loadVerbs()).toEqual(['take', 'dig'])
+  })
+
+  it('renaming keeps the words and stays active', () => {
+    glue.createLayout('Zork')
+    glue.saveVerbs(['dig'])
+    glue.renameActiveLayout('Zork I')
+    expect(glue.activeLayout()).toBe('Zork I')
+    expect(glue.loadVerbs()).toEqual(['dig'])
+    expect(glue.listLayouts()).toEqual(['Default', 'Zork I'])
+  })
+
+  it('dropping a layout falls back to a survivor', () => {
+    glue.createLayout('Zork')
+    glue.deleteActiveLayout()
+    expect(glue.listLayouts()).toEqual(['Default'])
+    expect(glue.activeLayout()).toBe('Default')
+  })
+
+  it('the last layout cannot be dropped', () => {
+    glue.deleteActiveLayout()
+    expect(glue.listLayouts()).toEqual(['Default'])
+  })
+
+  it('resetting restores the defaults for the ACTIVE layout only', () => {
+    glue.saveVerbs(['take'])
+    glue.createLayout('Zork')
+    glue.saveVerbs(['dig'])
+    glue.resetVerbs()
+    expect(glue.loadVerbs()).toContain('look')     // Zork restored
+    glue.switchToLayout('Default')
+    expect(glue.loadVerbs()).toEqual(['take'])     // Default untouched
+  })
+
+  it('the editor offers a picker listing every layout, with the active one selected', () => {
+    glue.createLayout('Zork')
+    glue.buildBar()
+    glue.openEditor()
+    const picker = document.querySelector<HTMLSelectElement>('#ifb-editor .ifb-layoutpicker')
+    expect(picker).not.toBe(null)
+    expect([...(picker?.options ?? [])].map(o => o.value)).toEqual(['Default', 'Zork'])
+    expect(picker?.value).toBe('Zork')
+  })
+
+  it('the picker switches layout on change, and the strip follows', () => {
+    glue.saveVerbs(['take'])
+    glue.createLayout('Zork')
+    glue.saveVerbs(['dig'])
+    glue.buildBar()
+    glue.openEditor()
+    const picker = document.querySelector<HTMLSelectElement>('#ifb-editor .ifb-layoutpicker')
+    if (!picker) { throw new Error('no picker') }
+    picker.value = 'Default'
+    picker.dispatchEvent(new Event('change', { bubbles: true }))
+    expect(glue.activeLayout()).toBe('Default')
+    expect([...document.querySelectorAll('#ifb-bar .ifb-verb')].map(b => (b.textContent ?? '').toLowerCase()))
+      .toEqual(['take'])
+  })
+
+  it('the Drop button is disabled while only one layout exists', () => {
+    glue.buildBar()
+    glue.openEditor()
+    const drop = () => document.querySelector<HTMLButtonElement>('#ifb-editor .ifb-droplayout')
+    expect(drop()?.disabled).toBe(true)
+    glue.createLayout('Zork')
+    expect(drop()?.disabled).toBe(false)
+  })
+
+  it('a layout name is never parsed as HTML', () => {
+    glue.createLayout('<b>x</b>')
+    glue.buildBar()
+    glue.openEditor()
+    expect(document.querySelector('#ifb-editor .ifb-layoutpicker b')).toBe(null)
+    expect(glue.listLayouts()).toContain('bxb')
+  })
+
+  it('survives blocked storage without throwing', () => {
+    const spy = vi.spyOn(Storage.prototype, 'setItem').mockImplementation(() => {
+      throw new Error('quota')
+    })
+    expect(() => { glue.createLayout('Zork'); glue.saveVerbs(['dig']) }).not.toThrow()
+    spy.mockRestore()
+  })
+
+  it('falls back to a usable store when the stored layouts are corrupt', () => {
+    localStorage.setItem('IFB_Layouts', '{not json')
+    expect(glue.loadVerbs()).toContain('look')
+    expect(glue.listLayouts()).toEqual(['Default'])
+  })
+})
+
 describe('a verb followed by a direction', () => {
   let glue: Glue
   beforeEach(async () => {

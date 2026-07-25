@@ -55,6 +55,21 @@ In settings you can:
 Order is not cosmetic — the strip shows three rows and scrolls, so whichever words come first are the
 ones reachable without scrolling.
 
+### Layouts
+
+Vocabularies differ per game, so the word list is not one list — it is a set of named **layouts** you
+switch between. Settings has a picker plus a name box:
+
+- **New** creates a layout with that name, starting from a copy of the shipped words, and switches to it.
+- **Rename** renames the one in use.
+- **Drop** deletes it. The last remaining layout can never be dropped, and **Defaults** restores the
+  shipped words for the layout in use only — it leaves your other layouts alone.
+
+Which layout is active is remembered too, so reopening a game comes back to the set you were using.
+Everything is stored in the browser under `IFB_Layouts`, per browser and not backed up (there is no
+server). A list saved before layouts existed is migrated into a layout called `Default` rather than
+being lost.
+
 ### Host commands starting with `/`
 
 Some hosts reserve `/name` for their own features — Parchmap uses `/map`, `/help`, `/notes`, `/theme`,

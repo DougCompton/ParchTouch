@@ -294,6 +294,9 @@ SW   S   SE   ⚙
   **◀ ▶** to reorder or **Delete** to remove it. You can also just **drag a word** to a new position,
   by mouse or by touch. Order matters: the strip shows three rows and scrolls, so the words you put
   first are the ones you can reach without scrolling.
+- **Layouts:** the word list is one of several named sets you switch between in settings — keep a
+  `Zork` layout and a `modern` one rather than re-pruning for every story. New layouts start from the
+  shipped words; the active choice is remembered across reloads.
 - Words may start with **`/`**, so a host's own commands (`/map`, `/notes`, …) work as buttons too.
   Those are claimed by the host rather than the game, so just tap them — **no ↵**. See
   [docs/INSTALL.md](docs/INSTALL.md).

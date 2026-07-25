@@ -135,6 +135,110 @@
     const v = normalizeVerb(verb);
     return list.filter((x) => x !== v);
   }
+  var MAX_LAYOUTS = 12;
+  var MAX_LAYOUT_NAME = 24;
+  var DEFAULT_LAYOUT = "Default";
+  function normalizeLayoutName(name) {
+    let s = str(name).trim();
+    if (!s) {
+      return "";
+    }
+    s = s.replace(/\s+/g, " ");
+    s = s.replace(/[^\p{L}\p{N} -]/gu, "");
+    s = s.replace(/^[\s-]+|[\s-]+$/g, "");
+    return s.slice(0, MAX_LAYOUT_NAME);
+  }
+  function emptyLayouts() {
+    return { active: DEFAULT_LAYOUT, sets: { [DEFAULT_LAYOUT]: DEFAULT_VERBS.slice() } };
+  }
+  function sanitizeLayouts(raw) {
+    var _a;
+    if (Array.isArray(raw)) {
+      const words = raw.filter((v) => typeof v === "string").map((v) => normalizeVerb(v)).filter((v) => v !== "");
+      return words.length === 0 ? emptyLayouts() : { active: DEFAULT_LAYOUT, sets: { [DEFAULT_LAYOUT]: words } };
+    }
+    if (raw === null || typeof raw !== "object") {
+      return emptyLayouts();
+    }
+    const obj = raw;
+    if (obj.sets === null || typeof obj.sets !== "object" || Array.isArray(obj.sets)) {
+      return emptyLayouts();
+    }
+    const sets = {};
+    for (const [rawName, rawWords] of Object.entries(obj.sets)) {
+      const name = normalizeLayoutName(rawName);
+      if (name === "" || Object.keys(sets).length >= MAX_LAYOUTS) {
+        continue;
+      }
+      if (!Array.isArray(rawWords)) {
+        continue;
+      }
+      sets[name] = rawWords.filter((v) => typeof v === "string").map((v) => normalizeVerb(v)).filter((v) => v !== "");
+    }
+    if (Object.keys(sets).length === 0) {
+      return emptyLayouts();
+    }
+    const wanted = normalizeLayoutName(typeof obj.active === "string" ? obj.active : "");
+    const active = wanted !== "" && wanted in sets ? wanted : (_a = Object.keys(sets)[0]) != null ? _a : DEFAULT_LAYOUT;
+    return { active, sets };
+  }
+  function layoutNames(store) {
+    return Object.keys(store.sets);
+  }
+  function activeWords(store) {
+    var _a;
+    return ((_a = store.sets[store.active]) != null ? _a : []).slice();
+  }
+  function setActiveWords(store, words) {
+    return { active: store.active, sets: { ...store.sets, [store.active]: words.slice() } };
+  }
+  function switchLayout(store, name) {
+    const n = normalizeLayoutName(name);
+    if (n === "" || !(n in store.sets)) {
+      return store;
+    }
+    return { active: n, sets: store.sets };
+  }
+  function createLayout(store, name) {
+    const n = normalizeLayoutName(name);
+    if (n === "" || n in store.sets || layoutNames(store).length >= MAX_LAYOUTS) {
+      return store;
+    }
+    return { active: n, sets: { ...store.sets, [n]: DEFAULT_VERBS.slice() } };
+  }
+  function renameLayout(store, from, to) {
+    const a = normalizeLayoutName(from);
+    const b = normalizeLayoutName(to);
+    if (a === "" || b === "" || !(a in store.sets)) {
+      return store;
+    }
+    if (a === b) {
+      return store;
+    }
+    if (b in store.sets) {
+      return store;
+    }
+    const sets = {};
+    for (const [name, words] of Object.entries(store.sets)) {
+      sets[name === a ? b : name] = words;
+    }
+    return { active: store.active === a ? b : store.active, sets };
+  }
+  function deleteLayout(store, name) {
+    var _a;
+    const n = normalizeLayoutName(name);
+    if (n === "" || !(n in store.sets) || layoutNames(store).length <= 1) {
+      return store;
+    }
+    const sets = {};
+    for (const [key, words] of Object.entries(store.sets)) {
+      if (key !== n) {
+        sets[key] = words;
+      }
+    }
+    const active = store.active === n ? (_a = Object.keys(sets)[0]) != null ? _a : DEFAULT_LAYOUT : store.active;
+    return { active, sets };
+  }
   function moveVerb(list, verb, toIndex) {
     const v = normalizeVerb(verb);
     const out = list.slice();
@@ -155,6 +259,7 @@
   }
 
   // src/if-buttons.ts
+  var LAYOUTS_KEY = "IFB_Layouts";
   var VERBS_KEY = "IFB_Verbs";
   var MOVES = [
     ["NW", "northwest"],
@@ -424,36 +529,71 @@
     ensureWordClicks(bw);
     return true;
   }
-  function loadVerbs() {
+  function loadLayouts() {
     try {
-      const raw = window.localStorage.getItem(VERBS_KEY);
-      if (!raw) {
-        return DEFAULT_VERBS.slice();
+      const raw = window.localStorage.getItem(LAYOUTS_KEY);
+      if (raw) {
+        return sanitizeLayouts(JSON.parse(raw));
       }
-      const parsed = JSON.parse(raw);
-      if (!Array.isArray(parsed)) {
-        return DEFAULT_VERBS.slice();
-      }
-      const clean = parsed.filter((v) => typeof v === "string" && normalizeVerb(v) !== "").map((v) => normalizeVerb(v));
-      if (clean.length === 0 && parsed.length > 0) {
-        return DEFAULT_VERBS.slice();
-      }
-      return clean;
     } catch (e) {
-      return DEFAULT_VERBS.slice();
     }
+    try {
+      const legacy = window.localStorage.getItem(VERBS_KEY);
+      if (legacy) {
+        return sanitizeLayouts(JSON.parse(legacy));
+      }
+    } catch (e) {
+    }
+    return emptyLayouts();
+  }
+  function saveLayouts(store) {
+    try {
+      window.localStorage.setItem(LAYOUTS_KEY, JSON.stringify(store));
+    } catch (e) {
+    }
+  }
+  function loadVerbs() {
+    const words = activeWords(loadLayouts());
+    return words.length === 0 && !hasStoredLayouts() ? DEFAULT_VERBS.slice() : words;
   }
   function saveVerbs(list) {
+    saveLayouts(setActiveWords(loadLayouts(), list));
+  }
+  function hasStoredLayouts() {
     try {
-      window.localStorage.setItem(VERBS_KEY, JSON.stringify(list));
+      return window.localStorage.getItem(LAYOUTS_KEY) !== null || window.localStorage.getItem(VERBS_KEY) !== null;
     } catch (e) {
+      return false;
     }
   }
+  function listLayouts() {
+    return layoutNames(loadLayouts());
+  }
+  function activeLayout() {
+    return loadLayouts().active;
+  }
+  function commitLayouts(next) {
+    saveLayouts(next);
+    renderVerbs();
+    renderEditor();
+  }
+  function switchToLayout(name) {
+    commitLayouts(switchLayout(loadLayouts(), name));
+  }
+  function createLayout2(name) {
+    commitLayouts(createLayout(loadLayouts(), name));
+  }
+  function renameActiveLayout(to) {
+    const store = loadLayouts();
+    commitLayouts(renameLayout(store, store.active, to));
+  }
+  function deleteActiveLayout() {
+    const store = loadLayouts();
+    commitLayouts(deleteLayout(store, store.active));
+  }
   function resetVerbs() {
-    try {
-      window.localStorage.removeItem(VERBS_KEY);
-    } catch (e) {
-    }
+    saveLayouts(setActiveWords(loadLayouts(), DEFAULT_VERBS.slice()));
+    selectedVerb = null;
     renderVerbs();
     renderEditor();
   }
@@ -681,7 +821,7 @@
     }, "Close settings"));
     const input = document.createElement("input");
     input.type = "text";
-    input.className = "ifb-newverb";
+    input.className = "ifb-textfield ifb-newverb";
     input.placeholder = "add a verb, e.g. dig";
     input.setAttribute("aria-label", "New verb");
     input.setAttribute("autocapitalize", "none");
@@ -716,6 +856,51 @@
       "Delete the selected word"
     ));
     panel.appendChild(row);
+    const layouts = document.createElement("div");
+    layouts.className = "ifb-editrow ifb-editlayouts";
+    const picker = document.createElement("select");
+    picker.className = "ifb-layoutpicker";
+    picker.setAttribute("aria-label", "Layout in use");
+    const current = activeLayout();
+    for (const name of listLayouts()) {
+      const opt = document.createElement("option");
+      opt.value = name;
+      opt.textContent = name;
+      if (name === current) {
+        opt.selected = true;
+      }
+      picker.appendChild(opt);
+    }
+    picker.addEventListener("change", () => {
+      switchToLayout(picker.value);
+    });
+    layouts.appendChild(picker);
+    const layoutName = document.createElement("input");
+    layoutName.type = "text";
+    layoutName.className = "ifb-textfield ifb-layoutname";
+    layoutName.placeholder = "layout name";
+    layoutName.setAttribute("aria-label", "Layout name, for New and Rename");
+    layoutName.setAttribute("autocapitalize", "none");
+    layouts.appendChild(layoutName);
+    layouts.appendChild(button("New", "ifb-newlayout", () => {
+      createLayout2(layoutName.value);
+      layoutName.value = "";
+    }, "Create a layout with this name, starting from the default words"));
+    layouts.appendChild(button("Rename", "ifb-renamelayout", () => {
+      renameActiveLayout(layoutName.value);
+      layoutName.value = "";
+    }, "Rename the layout in use"));
+    const dropLayout = button(
+      "Drop",
+      "ifb-droplayout",
+      () => {
+        deleteActiveLayout();
+      },
+      "Delete the layout in use"
+    );
+    dropLayout.disabled = listLayouts().length <= 1;
+    layouts.appendChild(dropLayout);
+    panel.appendChild(layouts);
     const list = document.createElement("div");
     list.className = "ifb-verblist";
     for (const v of loadVerbs()) {
@@ -956,6 +1141,14 @@
     measureBar,
     loadVerbs,
     saveVerbs,
+    loadLayouts,
+    saveLayouts,
+    listLayouts,
+    activeLayout,
+    switchToLayout,
+    createLayout: createLayout2,
+    renameActiveLayout,
+    deleteActiveLayout,
     resetVerbs,
     addVerbFromUI,
     removeVerbFromUI,

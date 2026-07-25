@@ -205,11 +205,14 @@
 }
 
 /*
- * The text box shares the row with six controls, so it gives up width rather than pushing them onto a
- * second line: it shrinks to a floor and no more. Sized to exactly --ifb-btn-h with border-box so the
- * row is the same height as a row of buttons — a taller input was what made this row stand out.
+ * Text boxes share a row with several buttons, so they give up width rather than pushing anything onto
+ * a second line: they shrink to a floor and no more. Sized to exactly --ifb-btn-h with border-box so a
+ * row is the same height as a row of buttons — a taller input was what made these rows stand out.
+ *
+ * .ifb-textfield carries the LOOK; .ifb-newverb and .ifb-layoutname identify which box is which, so a
+ * selector for one can never match the other.
  */
-.ifb-newverb {
+.ifb-textfield {
   flex: 1 1 90px;
   min-width: 64px;
   box-sizing: border-box;
@@ -222,9 +225,26 @@
   color: var(--ifb-text);
 }
 
+/* The layout picker sits with the buttons and matches their height exactly. */
+.ifb-layoutpicker {
+  flex: 0 1 auto;
+  min-width: 70px;
+  max-width: 40%;
+  box-sizing: border-box;
+  height: var(--ifb-btn-h);
+  padding: 0 6px;
+  font-size: 14px;
+  border: 1px solid var(--ifb-border);
+  border-radius: 8px;
+  background: var(--ifb-btn);
+  color: var(--ifb-text);
+}
+.ifb-layoutname { flex: 1 1 70px; }
+
 /* Narrow, single-purpose controls: let the text box keep as much of the row as possible. */
 .ifb-editrow .ifb { flex: 0 0 auto; }
-.ifb-closeeditor, .ifb-addverb, .ifb-resetverbs, .ifb-deleteverb { min-width: 0; padding: 6px 8px; }
+.ifb-closeeditor, .ifb-addverb, .ifb-resetverbs, .ifb-deleteverb,
+.ifb-newlayout, .ifb-renamelayout, .ifb-droplayout { min-width: 0; padding: 6px 8px; }
 .ifb-moveleft, .ifb-moveright { min-width: 40px; padding: 6px 4px; }
 .ifb-verblist { display: flex; gap: 6px; flex-wrap: wrap; }
 

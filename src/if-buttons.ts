@@ -41,10 +41,13 @@
  */
 
 import {
-  createState, clearPending, tapVerb, tapWord, tapDirect, tokenize, normalizeVerb,
+  createState, clearPending, tapVerb, tapWord, tapDirect, tokenize,
   DEFAULT_VERBS,
   addVerb as addVerbToList, removeVerb as removeVerbFromList, moveVerb as moveVerbInList,
-  type CommandState, type TapResult,
+  sanitizeLayouts, layoutNames, activeWords, setActiveWords, emptyLayouts,
+  switchLayout as switchLayoutIn, createLayout as createLayoutIn,
+  renameLayout as renameLayoutIn, deleteLayout as deleteLayoutIn,
+  type CommandState, type TapResult, type LayoutStore,
 } from './command-model'
 
 /** Which kind of input the game is waiting for, if any. */
@@ -71,6 +74,14 @@ export interface DebugHandle {
   measureBar: typeof measureBar
   loadVerbs: typeof loadVerbs
   saveVerbs: typeof saveVerbs
+  loadLayouts: typeof loadLayouts
+  saveLayouts: typeof saveLayouts
+  listLayouts: typeof listLayouts
+  activeLayout: typeof activeLayout
+  switchToLayout: typeof switchToLayout
+  createLayout: typeof createLayout
+  renameActiveLayout: typeof renameActiveLayout
+  deleteActiveLayout: typeof deleteActiveLayout
   resetVerbs: typeof resetVerbs
   addVerbFromUI: typeof addVerbFromUI
   removeVerbFromUI: typeof removeVerbFromUI
@@ -99,6 +110,12 @@ declare global {
   }
 }
 
+/*
+ * Storage keys. LAYOUTS_KEY holds everything now — which layout is in use and the words in each.
+ * VERBS_KEY is the ORIGINAL key, still read so that a list saved before layouts existed becomes the
+ * default layout rather than being silently lost. Nothing writes it any more.
+ */
+const LAYOUTS_KEY = 'IFB_Layouts'
 const VERBS_KEY = 'IFB_Verbs'
 
 /** label, command */
@@ -470,32 +487,78 @@ export function watchBuffer(): boolean {
 // ── verb list (persisted per browser) ────────────────────────────────────────────────────────
 // localStorage can throw (private mode, blocked storage, quota), so every access is guarded — a
 // failure must degrade to the defaults, never break the bar.
+/** Read whatever is stored, tolerating absence, corruption and the pre-layouts format. */
+export function loadLayouts(): LayoutStore {
+  try {
+    const raw = window.localStorage.getItem(LAYOUTS_KEY)
+    if (raw) { return sanitizeLayouts(JSON.parse(raw) as unknown) }
+  } catch {
+    // Unreadable or unparseable: fall through to the legacy key, then to the defaults.
+  }
+  try {
+    // A list saved before layouts existed becomes the default layout instead of being lost.
+    const legacy = window.localStorage.getItem(VERBS_KEY)
+    if (legacy) { return sanitizeLayouts(JSON.parse(legacy) as unknown) }
+  } catch {
+    // As above.
+  }
+  return emptyLayouts()
+}
+
+export function saveLayouts(store: LayoutStore): void {
+  try {
+    window.localStorage.setItem(LAYOUTS_KEY, JSON.stringify(store))
+  } catch {
+    // Storage unavailable or full: edits simply won't persist. Not worth interrupting play.
+  }
+}
+
+/** The words of the layout in use. */
 export function loadVerbs(): string[] {
-  try {
-    const raw = window.localStorage.getItem(VERBS_KEY)
-    if (!raw) { return DEFAULT_VERBS.slice() }
-    const parsed: unknown = JSON.parse(raw)
-    if (!Array.isArray(parsed)) { return DEFAULT_VERBS.slice() }
-    const clean = parsed
-      .filter((v): v is string => typeof v === 'string' && normalizeVerb(v) !== '')
-      .map(v => normalizeVerb(v))
-    if (clean.length === 0 && parsed.length > 0) { return DEFAULT_VERBS.slice() }
-    return clean
-  } catch {
-    return DEFAULT_VERBS.slice()
-  }
+  const words = activeWords(loadLayouts())
+  return words.length === 0 && !hasStoredLayouts() ? DEFAULT_VERBS.slice() : words
 }
 
+/** Replace the words of the layout in use. */
 export function saveVerbs(list: readonly string[]): void {
+  saveLayouts(setActiveWords(loadLayouts(), list))
+}
+
+/** True when something has actually been stored, as opposed to us falling back to the defaults. */
+function hasStoredLayouts(): boolean {
   try {
-    window.localStorage.setItem(VERBS_KEY, JSON.stringify(list))
+    return window.localStorage.getItem(LAYOUTS_KEY) !== null
+      || window.localStorage.getItem(VERBS_KEY) !== null
   } catch {
-    // Storage unavailable or full: the list simply won't persist. Not worth interrupting play.
+    return false
   }
 }
 
+// ── layout management ────────────────────────────────────────────────────────────────────────────
+export function listLayouts(): string[] { return layoutNames(loadLayouts()) }
+export function activeLayout(): string { return loadLayouts().active }
+
+function commitLayouts(next: LayoutStore): void {
+  saveLayouts(next)
+  renderVerbs()
+  renderEditor()
+}
+
+export function switchToLayout(name: string): void { commitLayouts(switchLayoutIn(loadLayouts(), name)) }
+export function createLayout(name: string): void { commitLayouts(createLayoutIn(loadLayouts(), name)) }
+export function renameActiveLayout(to: string): void {
+  const store = loadLayouts()
+  commitLayouts(renameLayoutIn(store, store.active, to))
+}
+export function deleteActiveLayout(): void {
+  const store = loadLayouts()
+  commitLayouts(deleteLayoutIn(store, store.active))
+}
+
+/** Restore the shipped words for the layout in use, leaving any other layout alone. */
 export function resetVerbs(): void {
-  try { window.localStorage.removeItem(VERBS_KEY) } catch { /* nothing to undo */ }
+  saveLayouts(setActiveWords(loadLayouts(), DEFAULT_VERBS.slice()))
+  selectedVerb = null
   renderVerbs()
   renderEditor()
 }
@@ -749,7 +812,7 @@ function renderEditor(): void {
   row.appendChild(button('✕ Close', 'ifb-closeeditor', () => { closeEditor() }, 'Close settings'))
   const input = document.createElement('input')
   input.type = 'text'
-  input.className = 'ifb-newverb'
+  input.className = 'ifb-textfield ifb-newverb'
   input.placeholder = 'add a verb, e.g. dig'
   input.setAttribute('aria-label', 'New verb')   // a placeholder is not an accessible name
   input.setAttribute('autocapitalize', 'none')
@@ -774,6 +837,50 @@ function renderEditor(): void {
   row.appendChild(button('Delete', 'ifb-deleteverb', () => { deleteSelected() },
     'Delete the selected word'))
   panel.appendChild(row)
+
+  /*
+   * Layout management. Its own row because the row above is already full, and because switching sets is
+   * a different kind of act from editing the words in one.
+   */
+  const layouts = document.createElement('div')
+  layouts.className = 'ifb-editrow ifb-editlayouts'
+
+  const picker = document.createElement('select')
+  picker.className = 'ifb-layoutpicker'
+  picker.setAttribute('aria-label', 'Layout in use')
+  const current = activeLayout()
+  for (const name of listLayouts()) {
+    const opt = document.createElement('option')
+    opt.value = name
+    opt.textContent = name              // textContent: a layout name is user input
+    if (name === current) { opt.selected = true }
+    picker.appendChild(opt)
+  }
+  picker.addEventListener('change', () => { switchToLayout(picker.value) })
+  layouts.appendChild(picker)
+
+  const layoutName = document.createElement('input')
+  layoutName.type = 'text'
+  layoutName.className = 'ifb-textfield ifb-layoutname'
+  layoutName.placeholder = 'layout name'
+  layoutName.setAttribute('aria-label', 'Layout name, for New and Rename')
+  layoutName.setAttribute('autocapitalize', 'none')
+  layouts.appendChild(layoutName)
+
+  layouts.appendChild(button('New', 'ifb-newlayout', () => {
+    createLayout(layoutName.value)
+    layoutName.value = ''
+  }, 'Create a layout with this name, starting from the default words'))
+  layouts.appendChild(button('Rename', 'ifb-renamelayout', () => {
+    renameActiveLayout(layoutName.value)
+    layoutName.value = ''
+  }, 'Rename the layout in use'))
+  const dropLayout = button('Drop', 'ifb-droplayout', () => { deleteActiveLayout() },
+    'Delete the layout in use')
+  // There must always be one layout left to play with.
+  dropLayout.disabled = listLayouts().length <= 1
+  layouts.appendChild(dropLayout)
+  panel.appendChild(layouts)
 
   const list = document.createElement('div')
   list.className = 'ifb-verblist'
@@ -1076,7 +1183,9 @@ export function currentState(): CommandState { return state }
 window.IFButtons = {
   findLineInput, inputMode, submitCommand, stageCommand, cancelPending, pressEnter, tapDirection,
   dismissMorePrompt, decorateBuffer, watchBuffer,
-  buildBar, adoptHostFeatures, measureBar, loadVerbs, saveVerbs, resetVerbs, addVerbFromUI,
+  buildBar, adoptHostFeatures, measureBar, loadVerbs, saveVerbs,
+  loadLayouts, saveLayouts, listLayouts, activeLayout, switchToLayout,
+  createLayout, renameActiveLayout, deleteActiveLayout, resetVerbs, addVerbFromUI,
   removeVerbFromUI, moveVerbFromUI, selectVerb, selectedVerbName, moveSelected, deleteSelected,
   renderVerbs, openEditor, closeEditor, toggleEditor, isEditorOpen,
   boot, stopBoot, currentState,
