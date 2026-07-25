@@ -1,0 +1,16 @@
+{
+  // The end-to-end specs and the Playwright config are NODE-side code, not shipped to a browser, so
+  // they are typechecked separately. The main tsconfig deliberately pins lib ES2018 to match the
+  // addon's advertised browser floor (Chrome 64+, Safari 11.1+, Firefox 78+, Edge 79+); widening it
+  // to satisfy test tooling would silently let a non-ES2018 API into the product.
+  "extends": "./tsconfig.json",
+  "compilerOptions": {
+    "lib": ["ES2022", "DOM", "DOM.Iterable"],
+    "types": ["node"],
+    "noEmit": true
+  },
+  // `src` is included so the specs can see the addon's own `Window.IFButtons` declaration.
+  // It is still checked under the ES2018 lib by the main project, so the browser floor stays enforced.
+  "include": ["src", "test/e2e", "playwright.config.ts"],
+  "exclude": ["node_modules"]
+}

@@ -7,3 +7,6 @@ harness/stories/*
 dist/*.map
 # execute-plan pipeline handoff artifacts (process, not product)
 .claude/
+# playwright run output
+test-results/
+playwright-report/

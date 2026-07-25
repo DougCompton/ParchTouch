@@ -9,6 +9,11 @@ echo "== independence ==";   npm run lint:independence
 echo "== tests ==";          npm test
 echo "== build ==";          npm run build
 
+# E2E runs AFTER the build, because it serves dist/ — the same artifact a host installs. The real-host
+# specs skip themselves when harness/vendor/ is absent (see harness/README.md), so this stays green on
+# a fresh clone while still covering the addon in real Chromium and WebKit via the synthetic host.
+echo "== e2e ==";            npm run test:e2e
+
 echo "== dist is a classic script =="
 if grep -nE '^[[:space:]]*(import|export)[[:space:]]' dist/glk-touch.js; then
   echo "FAIL: dist/glk-touch.js contains ESM syntax; hosts load it as a classic script." >&2

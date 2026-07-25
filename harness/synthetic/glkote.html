@@ -1,0 +1,147 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>Synthetic GlkOte host + glk-touch</title>
+
+<!--
+  A hand-built page implementing ONLY GlkOte's documented DOM contract — no interpreter, no host
+  application, no jQuery, no other scripts at all. Two jobs:
+
+  1. It is the §0.2 independence claim made executable in a real browser: the addon must work in a
+     page where no other application scripts exist.
+  2. It makes the protocol states DETERMINISTIC. A real game will not reliably produce char input or
+     a pager on demand, so those paths — the ones the plan calls the most important behaviour in the
+     addon — can only be exercised reproducibly against a stub like this.
+
+  window.SYN is the test control surface. It is NOT part of the addon's contract; the addon neither
+  knows nor cares that it exists.
+-->
+<link rel="stylesheet" href="../dist/glk-touch.css">
+<style>
+  body { margin: 0; font-family: Georgia, serif; }
+  .BufferWindow { padding: 12px; height: 60vh; overflow-y: auto; white-space: pre-wrap; }
+  .BufferLine { margin: 0 0 .5em; }
+  .Style_input { color: #06c; font-weight: bold; }
+  .MorePrompt { background: #333; color: #fff; padding: 2px 8px; display: inline-block; }
+  textarea.Input, input.Input { width: 90%; font: inherit; }
+</style>
+</head>
+<body>
+<div id="gameport">
+  <div id="windowport">
+    <div class="BufferWindow">
+      <div class="BufferLine">West of House.</div>
+      <div class="BufferLine">You are standing in an open field west of a white house, with a boarded front door.</div>
+      <div class="BufferLine">There is a small mailbox here, and a jewel-encrusted egg beside a café table.</div>
+    </div>
+  </div>
+</div>
+
+<script>
+/*
+ * Minimal GlkOte-shaped host stub. Mirrors what a real GlkOte does that the addon depends on:
+ * a line input carrying .Input.LineInput, echoing submitted commands into a .Style_input span, and
+ * a .MorePrompt that blocks input while showing.
+ */
+window.SYN = (function () {
+  var bw = document.querySelector('.BufferWindow')
+  var submitted = []          // every command the host actually received
+  var charKeys = []           // every keypress the host received while in char mode
+  var strayKeydowns = []      // keydowns on the line input — a jQuery host breaks on these
+  var input = null
+  var more = null
+
+  function echo(cmd) {
+    var line = document.createElement('div')
+    line.className = 'BufferLine'
+    var span = document.createElement('span')
+    span.className = 'Style_input'
+    span.textContent = '>' + cmd
+    line.appendChild(span)
+    bw.appendChild(line)
+  }
+
+  function onKey(e) {
+    // GlkOte hosts read Enter by keyCode; deliberately match that, not e.key, so the addon's
+    // keyCode override is what is being exercised.
+    if ((e.keyCode === 13 || e.which === 13) && input) {
+      var cmd = input.value
+      if (cmd) { submitted.push(cmd); echo(cmd); input.value = '' }
+    }
+  }
+
+  var api = {
+    /** Enter LINE input mode: create the textarea GlkOte would create. */
+    setLine: function (opts) {
+      opts = opts || {}
+      api.clearInputs()
+      // A real AsyncGlk build uses a <textarea> and emits BOTH a bare .Input and an .Input.LineInput.
+      if (opts.alsoBare) {
+        var bare = document.createElement(opts.tag === 'input' ? 'input' : 'textarea')
+        bare.className = 'Input'
+        bw.appendChild(bare)
+      }
+      input = document.createElement(opts.tag === 'input' ? 'input' : 'textarea')
+      input.className = opts.bareOnly ? 'Input' : 'Input LineInput'
+      // Real GlkOte cores read Enter on KEYPRESS; the addon dispatches only that. keydown is
+      // recorded separately so a regression that reintroduces it is visible to a test.
+      input.addEventListener('keypress', onKey)
+      input.addEventListener('keydown', function (e) { strayKeydowns.push(e.keyCode || e.which) })
+      bw.appendChild(input)
+      return input
+    },
+    /** Enter CHAR input mode: no line input exists at all; the host listens for a single key. */
+    setChar: function () {
+      api.clearInputs()
+      var line = document.createElement('div')
+      line.className = 'BufferLine'
+      line.textContent = '[Press any key to continue.]'
+      bw.appendChild(line)
+      bw.addEventListener('keypress', charHandler)
+      return null
+    },
+    showMore: function (hidden) {
+      if (!more) {
+        more = document.createElement('div')
+        more.className = 'MorePrompt'
+        more.textContent = '— more —'
+        more.addEventListener('click', function () { api.hideMore() })
+        bw.appendChild(more)
+      }
+      more.style.display = hidden ? 'none' : ''
+      return more
+    },
+    hideMore: function () { if (more) { more.remove(); more = null } },
+    clearInputs: function () {
+      bw.querySelectorAll('.Input').forEach(function (n) { n.remove() })
+      bw.removeEventListener('keypress', charHandler)
+      input = null
+    },
+    addLine: function (text) {
+      var line = document.createElement('div')
+      line.className = 'BufferLine'
+      line.textContent = text
+      bw.appendChild(line)
+      return line
+    },
+    submitted: function () { return submitted.slice() },
+    charKeys: function () { return charKeys.slice() },
+    strayKeydowns: function () { return strayKeydowns.slice() },
+    reset: function () { submitted.length = 0; charKeys.length = 0; strayKeydowns.length = 0 },
+  }
+
+  function charHandler(e) { charKeys.push(e.keyCode || e.which) }
+
+  return api
+})()
+
+// Default state: awaiting a typed line, the normal case.
+window.SYN.setLine({ alsoBare: true })
+</script>
+
+<!-- the addon, loaded exactly as a host installs it: one classic script, nothing else on the page -->
+<script src="../dist/glk-touch.js"></script>
+</body>
+</html>

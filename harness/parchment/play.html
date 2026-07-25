@@ -6,6 +6,17 @@
 <title>Parchment + glk-touch</title>
 
 <!--
+  Asset layout (plan Unknown U8, resolved against real artifacts):
+  the `dist/web/{web.js,web.css,jquery.min.js,ie.js}` layout below is correct — it is exactly what
+  the live modern deploy (iplayif.com) serves, and this page mirrors that deploy's own index.html.
+  It is NOT, however, what the GitHub *release assets* contain: `parchment-for-inform7-*.zip` ships a
+  flat legacy build (parchment.js + processBase64Zcode JSONP loading) and
+  `parchment-single-file-*.zip` ships one self-contained 5MB HTML file. So vendor the modern build
+  from the live deploy or from a source build — see harness/README.md.
+
+  Note web.js is loaded as type="module", which is why the addon can be a plain classic script loaded
+  afterwards: it does not participate in the host's module graph at all.
+
   parchment_options is Parchment's supported config global and MUST be set BEFORE its scripts load.
   default_story is resolved SAME-ORIGIN (/stories/...), so Parchment never routes the story through
   its CORS proxy — the harness works offline. ?story= is restricted to a bare filename so this page
@@ -13,13 +24,15 @@
 -->
 <script>
 (function () {
-  var raw = new URLSearchParams(location.search).get('story') || ''
-  var safe = /^[A-Za-z0-9 ._'()-]+$/.test(raw) && raw.indexOf('..') === -1 ? raw : ''
-  if (safe) {
-    window.parchment_options = {
-      default_story: ['../stories/' + encodeURIComponent(safe)],
-      lock_story: 1, lock_options: 1, page_title: 0
-    }
+  // The CURRENT Parchment build reads its story from the page's own ?story= query parameter
+  // (web.js parses document.location.search); the older parchment_options.default_story /
+  // lock_story / lock_options keys no longer exist in the build. So this page deliberately does
+  // NOT set the story — it lets Parchment read ?story= directly, and only supplies the options
+  // that still exist, keeping the harness offline.
+  window.parchment_options = {
+    use_proxy: 0,          // the story is same-origin; never route it through the CORS proxy
+    do_vm_autosave: 0,     // a fresh game every load makes the harness deterministic
+    theme_cookie: ''       // do not persist a theme cookie during testing
   }
 })()
 </script>
@@ -31,13 +44,13 @@
 <div id="gameport">
   <div id="about"></div>
   <div id="windowport"></div>
-  <div id="loadingpane" style="display:none"><p>Loading story…</p></div>
+  <div id="loadingpane" style="display:none"><em>Loading story…</em></div>
   <div id="errorpane" style="display:none"><div id="errorcontent"></div></div>
 </div>
 
 <script src="../parchment-vendor/dist/web/jquery.min.js"></script>
-<script nomodule src="../parchment-vendor/dist/web/ie.js"></script>
-<script type="module" src="../parchment-vendor/dist/web/web.js"></script>
+<script src="../parchment-vendor/dist/web/ie.js" nomodule></script>
+<script src="../parchment-vendor/dist/web/web.js" type="module"></script>
 
 <!-- the addon: the same single classic script a real deployment installs -->
 <script src="../dist/glk-touch.js"></script>

@@ -5,17 +5,26 @@
   "license": "MIT",
   "author": "Doug Compton",
   "type": "module",
-  "files": ["dist", "src", "LICENSE", "README.md", "docs"],
+  "files": [
+    "dist",
+    "src",
+    "LICENSE",
+    "README.md",
+    "docs"
+  ],
   "scripts": {
-    "typecheck": "tsc --noEmit",
+    "typecheck": "tsc --noEmit && tsc -p tsconfig.e2e.json",
     "test": "vitest run",
     "test:watch": "vitest",
     "build": "sh scripts/build.sh",
     "dev": "esbuild src/if-buttons.ts --bundle --format=iife --target=es2018 --sourcemap --outfile=dist/glk-touch.js --watch",
     "lint:independence": "sh scripts/check-independence.sh",
-    "ci": "sh scripts/ci.sh"
+    "ci": "sh scripts/ci.sh",
+    "test:e2e": "playwright test"
   },
   "devDependencies": {
+    "@playwright/test": "^1.62.0",
+    "@types/node": "^26.1.1",
     "esbuild": "^0.24.0",
     "jsdom": "^25.0.1",
     "typescript": "^5.6.0",

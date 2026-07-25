@@ -197,15 +197,14 @@
     return "char";
   }
   function fireKey(el, key, keyCode) {
-    for (const type of ["keydown", "keypress", "keyup"]) {
-      const e = new KeyboardEvent(type, { bubbles: true, cancelable: true, key, code: key });
-      try {
-        Object.defineProperty(e, "keyCode", { get: () => keyCode });
-        Object.defineProperty(e, "which", { get: () => keyCode });
-      } catch (e2) {
-      }
-      el.dispatchEvent(e);
+    const e = new KeyboardEvent("keypress", { bubbles: true, cancelable: true, key, code: key });
+    try {
+      Object.defineProperty(e, "keyCode", { get: () => keyCode });
+      Object.defineProperty(e, "which", { get: () => keyCode });
+      Object.defineProperty(e, "charCode", { get: () => keyCode });
+    } catch (e2) {
     }
+    el.dispatchEvent(e);
   }
   function dismissMorePrompt() {
     const more = morePrompt();

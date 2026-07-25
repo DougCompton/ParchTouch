@@ -41,10 +41,38 @@ import {
 /** Which kind of input the game is waiting for, if any. */
 export type InputMode = 'line' | 'char' | 'more'
 
+/**
+ * Shape of the console debugging handle assigned at the bottom of this file. Declared with `typeof`
+ * so it cannot drift from the real functions, and so the troubleshooting docs and the end-to-end
+ * suite get accurate types. Types are erased, so this costs the bundle nothing.
+ */
+export interface DebugHandle {
+  findLineInput: typeof findLineInput
+  inputMode: typeof inputMode
+  submitCommand: typeof submitCommand
+  dismissMorePrompt: typeof dismissMorePrompt
+  decorateBuffer: typeof decorateBuffer
+  watchBuffer: typeof watchBuffer
+  buildBar: typeof buildBar
+  adoptHostFeatures: typeof adoptHostFeatures
+  loadVerbs: typeof loadVerbs
+  saveVerbs: typeof saveVerbs
+  resetVerbs: typeof resetVerbs
+  addVerbFromUI: typeof addVerbFromUI
+  removeVerbFromUI: typeof removeVerbFromUI
+  renderVerbs: typeof renderVerbs
+  boot: typeof boot
+  stopBoot: typeof stopBoot
+  currentState: typeof currentState
+}
+
 declare global {
   interface Window {
-    /** Console debugging handle — see the assignment at the bottom of this file. */
-    IFButtons?: Record<string, unknown>
+    /**
+     * Console debugging handle — see the assignment at the bottom of this file. Not optional: the
+     * module assigns it at load, so it is always present to anything running afterwards.
+     */
+    IFButtons: DebugHandle
   }
 }
 
@@ -124,18 +152,37 @@ export function inputMode(): InputMode {
 /**
  * Hosts listen for Enter by keyCode. Synthetic KeyboardEvents cannot set keyCode through the
  * constructor, so the getters are overridden — the standard approach for driving such widgets.
+ *
+ * ONLY `keypress` IS DISPATCHED, AND THAT IS LOAD-BEARING. Do not "restore" keydown/keyup.
+ *
+ * Measured against both reference hosts, submitting `east` from the same starting room:
+ *
+ *   host                    keydown+keypress+keyup   keydown only   keypress only
+ *   ----------------------  -----------------------  -------------  -------------
+ *   modern GlkOte/AsyncGlk  delivered                nothing        delivered
+ *   legacy jQuery GlkOte    EMPTY COMMAND SENT       nothing        delivered
+ *
+ * The legacy failure is the dangerous one and it is caused by the keydown. That host binds its own
+ * keydown handler on <body>; our keydown bubbles to it, it clears the input field and submits, so the
+ * interpreter reads an empty line ("I beg your pardon?") and the player silently loses a turn — while
+ * our later keypress finds nothing left to send. Dispatching keypress alone satisfies both hosts,
+ * needs no jQuery, and keeps this host-agnostic (§0.2).
+ *
+ * keypress is formally deprecated but is still what GlkOte cores listen on. If a future host ever
+ * listens only on keydown, add it back behind evidence and a test — not on principle.
  */
 function fireKey(el: EventTarget, key: string, keyCode: number): void {
-  for (const type of ['keydown', 'keypress', 'keyup']) {
-    const e = new KeyboardEvent(type, { bubbles: true, cancelable: true, key, code: key })
-    try {
-      Object.defineProperty(e, 'keyCode', { get: () => keyCode })
-      Object.defineProperty(e, 'which', { get: () => keyCode })
-    } catch {
-      // Already non-configurable on this engine; the key/code properties still carry the intent.
-    }
-    el.dispatchEvent(e)
+  const e = new KeyboardEvent('keypress', { bubbles: true, cancelable: true, key, code: key })
+  try {
+    Object.defineProperty(e, 'keyCode', { get: () => keyCode })
+    Object.defineProperty(e, 'which', { get: () => keyCode })
+    // jQuery derives `which` for keypress from charCode when present, and a jQuery-based host bails
+    // on a falsy which — so carry the code here too.
+    Object.defineProperty(e, 'charCode', { get: () => keyCode })
+  } catch {
+    // Already non-configurable on this engine; the key/code properties still carry the intent.
   }
+  el.dispatchEvent(e)
 }
 
 export function dismissMorePrompt(): boolean {

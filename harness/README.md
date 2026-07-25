@@ -47,14 +47,27 @@ npm run dev            # or: rebuild dist/glk-touch.js on every save (own termin
 
 ```bash
 cd harness
-docker compose up
+docker compose up            # nginx
+# or, no Docker and no dependencies (same prefix mapping):
+node ../scripts/serve-harness.mjs [port]
 ```
 
 | URL | What |
 |-----|------|
-| <http://localhost:8080/parchment/play.html?story=zork1.z5> | Parchment + the addon |
-| <http://localhost:8080/parchmap/play.html?story=zork1.z5>  | Parchmap + the addon |
+| <http://localhost:8080/parchment/play.html?story=../stories/advent.z5> | Parchment + the addon |
+| <http://localhost:8080/parchmap/play.html?story=games/Advent.z5.js> | Parchmap + the addon |
 | <http://localhost:8080/stories/> | the story directory (same-origin, so no CORS proxy) |
+
+**`?story=` must be a path, not a bare filename**, and it is host-specific:
+
+- **Parchment** resolves it with `new URL(story, document.URL)`, i.e. relative to `/parchment/`, so
+  the story needs the `../stories/` prefix. A bare `?story=advent.z5` does not merely 404 — Parchment
+  derives its loading-pane title with `/([/=])([^/=]+)$/.exec(path)[2]`, which returns `null` for a
+  string containing no `/` or `=`, so the page dies with `TypeError: Cannot read properties of null
+  (reading '2')` before it fetches anything.
+- **Parchmap** links its own games as `play.html?story=games/<Filename>`, and its catalogue ships
+  JS-wrapped (`Advent.z5.js`). Whether it also accepts a raw story outside `games/` is still open —
+  `docs/COMPATIBILITY.md` question 4.
 
 Both pages load `/dist/glk-touch.js` and `/dist/glk-touch.css` — the exact artifacts a downstream
 deployment copies out of a git tag. Serving the real bundle rather than the ESM sources is deliberate:
@@ -67,3 +80,21 @@ git-ignored `vendor/` tree, so the harness never commits a modified host.
 
 No Docker? `python3 -m http.server 8080` from this directory also works, but the story-directory JSON
 index and the no-store header are nginx-specific.
+
+## Automated verification
+
+Once the hosts are vendored and a story is in `stories/`, the end-to-end suite drives them for real:
+
+```bash
+cd ..
+npm run build        # e2e serves dist/, the artifact a host actually installs
+npm run test:e2e     # Chromium + WebKit
+```
+
+It starts its own server (`scripts/serve-harness.mjs`), so Docker is not needed. Findings are recorded
+in `../docs/COMPATIBILITY.md`.
+
+`synthetic/glkote.html` is a third, dependency-free host implementing only GlkOte's DOM contract with
+no other scripts on the page. It is how the char-input and pager states get deterministic coverage — a
+real game will not produce them on demand — and it doubles as the executable form of the
+"works with no host application present" claim.

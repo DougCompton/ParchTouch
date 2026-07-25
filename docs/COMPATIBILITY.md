@@ -1,56 +1,141 @@
 # Verified hosts
 
-> ## ⚠ STATUS: NOT YET VERIFIED — DO NOT PIN A RELEASE AGAINST THIS FILE
->
-> Every `<placeholder>` below is still unfilled. Nothing in this file has been observed against a
-> running host yet: the checks require a browser, the two vendored hosts, a story file and a physical
-> tablet, none of which the automated implementation pass could provide.
->
-> This file is a **deliverable**, not a note — a downstream deployment depends on the answers here
-> (see §0.3 of the plan). Fill it in by running the plan's **Phase 5** (Parchment) and **Phase 6**
-> (Parchmap) checklists against `harness/`, then delete this banner.
->
-> `Task F.5` of the plan fails while any `<placeholder>` remains.
+Verified by the automated end-to-end suite (`npm run test:e2e`) driving **real** hosts in **real
+browsers** — Chromium and WebKit — playing a real Z-machine story (Adventure, release 9 / 060321).
+Re-run it to reproduce every claim below.
+
+**Still outstanding: a physical tablet.** WebKit is iOS Safari's engine family, so the synthetic-event
+mechanism is proven there, but real touch input, the software keyboard and viewport behaviour are not.
+That is plan Task 5.3 and it needs hardware.
 
 | Host | Version / commit | Verified | `.Input.LineInput`? | Notes |
 |------|------------------|----------|---------------------|-------|
-| Parchment | `<tag>` | `<date>` | `<yes/no>` | reference host; MIT; AsyncGlk |
-| Parchmap | `<sha>` | `<date>` | yes | GPL-3.0; also provides a map |
-
-## Parchment (AsyncGlk)
-
-- `inputMode()` observed behaviour: `<observed>`
-- `.MorePrompt` lifecycle: **`<destroyed on dismiss / kept and hidden>`** — if kept and hidden, the
-  `isVisible()` guard in `if-buttons.ts` is load-bearing; do not remove it.
-- Tablet pass (device / OS / browser): `<result>`
-
-## Parchmap
-
-- Map updates from addon-submitted commands: `<PASS/FAIL + how verified>`
-- Input-buffer collision with its `Input.js`: `<PASS/FAIL>`
-- Map container selector matched by `MAP_SELECTORS`: `<selector>`
-- Story format accepted: `<raw / .js-wrapped>`; wrapper function: `<name or n/a>`
-- `?story=` accepts a path outside `games/`: `<yes/no>`
+| Parchment (modern) | live `iplayif.com` build, `dist/web/*`, fetched 2026-07-25 | 2026-07-25 | **yes** | reference host; MIT; AsyncGlk; engine `bocfel.wasm` |
+| Parchmap | `roylaza/Parchmap` `main` @ `f9ecfde`, cloned 2026-07-25 | 2026-07-25 | **yes** | GPL-3.0; legacy Parchment core + jQuery 3.5.1; also provides a map |
 
 ---
 
-## What HAS been verified (automated, jsdom — not a real host)
+## Parchment (AsyncGlk) — §0.3 question 1
 
-These are covered by the 101-test suite (`npm test`) against jsdom, and by `tsc --noEmit`. They are
-evidence about the addon's own logic, **not** about any real host's DOM:
+- **`.Input.LineInput` is emitted: YES.** Exactly one, plus one bare `.Input` alongside it.
+- **The line input is a `<textarea>`, not an `<input>`.** This corrects the plan's contract, which
+  documents the target as `input.Input.LineInput`. `findLineInput()` works here *only* because it also
+  tries the bare-class selector `.Input.LineInput`. **That alternative is load-bearing on the current
+  reference host** — the opposite of the plan's assumption that the `input.` form is primary. Do not
+  "simplify" it away.
+- Contract confirmed present: `.BufferWindow`, `.BufferLine`, `.Input`, `.LineInput`, `.Style_input`.
+  There is also a `.BufferWindowInner` element the plan's contract does not mention; the addon does not
+  need it, but be aware the scrolling element is not the only wrapper.
+- **`.MorePrompt` lifecycle: the class does not exist in this build at all.** It appears nowhere in
+  `web.js` and no such element is ever created, so `inputMode()` can only return `'line'` or `'char'`
+  here and the pager path is unreachable. It is *not* dead code — see Parchmap below.
+- `inputMode()` observed: `'line'` while awaiting a command.
+- Verified by tap alone: compass movement, `Look`, `Inv`, verb+noun in **both** orders, verb
+  persistence across reload, lossless decoration of the banner text, echoed input never decorated, and
+  no third-party network requests.
+- Tablet pass (device / OS / browser): **outstanding — needs hardware.**
 
-- `.Input.LineInput` preferred over bare `.Input`; last match wins when several exist; bare `.Input`
-  accepted as a fallback when a build omits the `LineInput` class.
-- `inputMode()` returns `more` / `line` / `char` correctly, and treats a `.MorePrompt` that is hidden
-  by inline `display:none`, by the `hidden` attribute, or by a stylesheet class as **not** showing —
-  so a host that keeps the element and toggles visibility cannot deadlock input.
-- `submitCommand()` assigns (never appends to) the field, fires an `input` event, then
-  `keydown`/`keypress`/`keyup` with `keyCode` 13; returns `true` only on actual delivery.
-- In `char` mode a space keypress (`keyCode` 32) is dispatched to `.BufferWindow` instead, and the
-  command is refused rather than silently dropped.
-- Story text is never parsed as HTML; echoed input (`.Style_input`, on a span or on the line itself)
-  is never made tappable; decoration is lossless and idempotent.
-- Verb list persists to `localStorage` under `IFB_Verbs`, and degrades to defaults on corrupt data,
-  non-array data, or storage that throws on read or write.
-- The addon boots against a bare GlkOte DOM with **no** host scripts present, and adds map-related
-  behaviour only when a map element is actually found.
+### Its `parchment_options` keys have changed
+
+The plan documents `default_story`, `lock_story`, `lock_options` and `story_name`. **None of those
+exist in the current build.** `web.js` reads its story from the page's own `?story=` query parameter,
+and the surviving options are `auto_launch`, `autoplay`, `use_proxy`, `proxy_url`, `lib_path`,
+`do_vm_autosave`, `theme_cookie`, `direct_domains`, `set_body_to_page_bg`.
+
+`?story=` must be a **path**, not a bare filename. A bare `?story=advent.z5` does not merely 404 —
+Parchment derives its loading-pane title with `/([/=])([^/=]+)$/.exec(path)[2]`, which is `null` for a
+string containing no `/` or `=`, so the page dies with `TypeError: Cannot read properties of null
+(reading '2')` before fetching anything.
+
+---
+
+## Parchmap — §0.3 questions 2, 3 and 4
+
+- **Does the map update from addon-submitted commands? PASS.** It cannot desync, by construction.
+  `Parchmap.GetRoom()` runs from a **200 ms polling loop** and reads the room name out of the rendered
+  output (`#windowport .GridLine span`, the status line), with the direction from
+  `Input.GetLastDirection()`, which scans echoed `.Style_input`. Both are output-derived, and the echo
+  appears however the command was submitted. Parchmap never observes input at all. Verified: tapping
+  the compass adds rooms to the map exactly as typing would.
+  **Consequence: the plan's Task 6.1 jQuery-dispatch contingency is unnecessary and was not added.**
+- **Input-buffer collision: PASS.** Its `Input.js` appends (`val(val() + text)`) where the addon
+  assigns. Verified with `ta` pre-loaded in the field: exactly `take building` is submitted, never
+  `tatake building`, and the field is empty afterwards.
+- **Map container selector: `#map`** — already matched by the addon's existing generic
+  `MAP_SELECTORS`. No narrowing was needed, so plan Task 6.5 is moot and detection stays
+  capability-based rather than host-based.
+- **Story format: `.js`-wrapped, required.** Its catalogue ships 298 games all named like
+  `Advent.z5.js`. **Wrapper function: `processBase64Zcode('<base64>')`.** Its own links use
+  `play.html?story=games/<Filename>`.
+  Whether `?story=` reaches a raw story *outside* `games/` is **still open** — not needed for the addon,
+  and it only affects how a downstream deployment serves its library.
+- Host features unaffected: its own map toggles and line input remain, and after a reload the addon's
+  verbs *and* the host's map data both survive, so `IFB_Verbs` does not disturb its `PM_*` keys.
+- No third-party requests, with `GA_TRACK = false` (the harness setup flips it; it ships `true`).
+
+### `.MorePrompt` DOES exist here, and the visibility guard matters
+
+Its legacy core emits `.MorePrompt` (present in `lib/main.js` and `css/parchment.css`). More
+importantly, **whether a pager appears depends on font metrics**: the same page shows a `.MorePrompt`
+at startup in **WebKit** but not in Chromium, and a short or tablet-sized viewport makes it more
+likely still.
+
+So on this host `inputMode()` really does return `'more'`, the addon dismisses rather than submitting,
+and **the first tap can legitimately be consumed by the pager**. That is correct behaviour — a command
+sent while paging would be swallowed — but it is worth knowing when a tap appears to "do nothing".
+The `isVisible()` guard in `if-buttons.ts` is what stops a retained-but-hidden pager from deadlocking
+input forever; keep it.
+
+### Interop hazard: it overwrites the global `Map`
+
+`js/Map.js` declares `var Map = {…}` at global scope, shadowing the native `Map` constructor. This
+breaks *test tooling* rather than the addon: Playwright builds its injected script inside the page and
+calls `new Map()`, so on this host nearly every Playwright call fails with `Map is not a constructor`.
+`test/e2e/helpers.ts` works around it with `shieldNativeMap()`.
+
+The addon is unaffected **because it never reads a host global** (§0.2) — an incidental but real
+vindication of that rule.
+
+---
+
+## The one addon defect real-host testing found
+
+Dispatching `keydown` as well as `keypress` made this host submit an **empty command**, silently
+costing the player a turn: it binds its own keydown handler on `<body>`, our keydown bubbled to it, and
+it cleared the input field before our keypress could be read. Measured, submitting `east` from the same
+room:
+
+| host | keydown+keypress+keyup | keydown only | keypress only |
+|------|------------------------|--------------|---------------|
+| modern GlkOte / AsyncGlk | delivered | nothing | **delivered** |
+| legacy jQuery GlkOte | **EMPTY COMMAND SENT** | nothing | **delivered** |
+
+`fireKey()` therefore dispatches **`keypress` only**, and carries the code on `keyCode`, `which` *and*
+`charCode` (a jQuery host derives `which` for keypress from `charCode` and bails on a falsy value).
+jsdom could not have caught this: it has no host to collide with. Do not restore `keydown` without new
+evidence and a test.
+
+---
+
+## Release-asset layout (plan Unknown U8)
+
+The `dist/web/{web.js,web.css,jquery.min.js,ie.js}` layout the plan assumes is what the **live deploy**
+serves, and it is correct. It is **not** what the GitHub *release assets* contain:
+
+| Asset | Contents |
+|-------|----------|
+| `parchment-for-inform7-2025-01-14.zip` | a flat **legacy** build — `parchment.js`, `main.js`, `zvm.js`, `quixe.js`, `processBase64Zcode` JSONP loading. Not AsyncGlk. |
+| `parchment-single-file-2025-01-14.zip` | one self-contained 5 MB `parchment.html` |
+
+So vendor the modern build from the live deploy or from a source build, not from a release asset. Also
+note `web.js` is loaded as `type="module"`, which is exactly why the addon can be a plain classic
+script loaded afterwards: it never joins the host's module graph.
+
+---
+
+## What the jsdom suite covers (103 tests, no browser)
+
+Complementary, not a substitute: selector precedence and last-match-wins, all three `inputMode()`
+states including a pager hidden by inline style / the `hidden` attribute / a stylesheet class, command
+assignment and residue replacement, lossless and idempotent decoration, XSS safety, the verb editor and
+its `localStorage` failure modes, and booting against a bare GlkOte DOM with no host scripts at all.

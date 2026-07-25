@@ -41,8 +41,13 @@ documented DOM contract:
 |------|----------|
 | `.BufferWindow` | MutationObserver root; bottom padding so the bar never covers text |
 | `.BufferLine` | the unit of word tokenization |
-| `input.Input.LineInput` (or bare `input.Input`) | command submission, and the positive test for line mode |
+| `.Input.LineInput` (or bare `.Input`) | command submission, and the positive test for line mode |
 | `.MorePrompt` | paging indicator — dismissed before submitting, so no command is swallowed |
+
+Two details worth knowing, both established by testing real builds rather than assumed: the line input
+is a **`<textarea>`** in current AsyncGlk (so the selector must not insist on `input.`), and the command
+is submitted with a **`keypress` only** — adding `keydown` makes a legacy jQuery-based host clear its
+field and submit an empty command. See [docs/COMPATIBILITY.md](docs/COMPATIBILITY.md).
 | `.Style_input` | echoed player input — deliberately *not* made tappable |
 
 Because that contract is what makes a host a host, one bundle serves any GlkOte player. The addon
@@ -63,20 +68,27 @@ Browser floor: Chrome 64+, Safari 11.1+, Firefox 78+, Edge 79+ — set by Unicod
 
 See [docs/COMPATIBILITY.md](docs/COMPATIBILITY.md).
 
-> Note: real-host verification against Parchment and Parchmap is **still outstanding** — that file
-> currently records only what the automated suite proves against jsdom. Run the Phase 5 and Phase 6
-> checklists before pinning a release.
+Both Parchment (modern AsyncGlk) and Parchmap are verified automatically, in Chromium and WebKit,
+playing a real story. **A physical tablet is still outstanding** — WebKit proves the event mechanism
+but not real touch input or the software keyboard.
 
 ## Development
 
 ```bash
 npm install
-npm test                    # 101 tests, vitest + jsdom
+npm test                    # 103 unit tests, vitest + jsdom
+npm run test:e2e            # 49 end-to-end tests x (Chromium + WebKit), real hosts
 npm run typecheck           # tsc --noEmit; esbuild strips types but does not check them
 npm run lint:independence   # fails if src/ names a specific host
 npm run build               # dist/glk-touch.js (IIFE) + dist/glk-touch.css
 sh scripts/ci.sh            # every gate, in fail-fastest order
 ```
+
+The end-to-end suite exists because jsdom cannot prove two things: that a synthetic Enter really
+reaches a host in a live engine, and what classes a real GlkOte build actually emits. It runs in
+**WebKit** as well as Chromium — WebKit being iOS Safari's engine family, and a tablet being the point
+of this addon. Real-host tests skip themselves when `harness/vendor/` is absent, so a fresh clone stays
+green on the synthetic host alone; see [harness/README.md](harness/README.md) to vendor the hosts.
 
 `sh scripts/ci.sh` is deliberately forge-agnostic — call it from any CI, a pre-push hook, or by hand.
 On Windows run the `sh`-based scripts from **Git Bash** or WSL; `sh` is not on the PATH in PowerShell

@@ -129,6 +129,13 @@ describe('submitCommand', () => {
   let glue: Glue
   beforeEach(async () => { glue = await loadGlue() })
 
+  // CORRECTED against real-host evidence. This test originally required the sequence
+  // ['keydown', 'keypress', 'keyup']. Measured against both reference hosts, that sequence makes a
+  // legacy jQuery-based GlkOte submit an EMPTY command and silently cost the player a turn: it binds
+  // its own keydown handler on <body>, our keydown bubbles to it, and it clears the field before our
+  // keypress can be read. `keypress` alone is delivered correctly by BOTH a modern AsyncGlk host and a
+  // legacy one, so that is now the contract. The full measurement table is in the fireKey() comment in
+  // src/if-buttons.ts, and test/e2e/*.spec.ts is the real-browser proof.
   it('writes the command into the input and fires Enter with keyCode 13', () => {
     makeBuffer(['x'], { withInput: true })
     const input = liveInput()
@@ -138,8 +145,32 @@ describe('submitCommand', () => {
     }
     expect(glue.submitCommand('north')).toBe(true)
     expect(input.value).toBe('north')
-    expect(seen.map(s => s.type)).toEqual(['keydown', 'keypress', 'keyup'])
+    expect(seen.map(s => s.type)).toEqual(['keypress'])
     expect(seen.every(s => s.keyCode === 13)).toBe(true)
+  })
+
+  it('never fires keydown, which makes a jQuery-based host submit an empty command', () => {
+    makeBuffer(['x'], { withInput: true })
+    const input = liveInput()
+    const types: string[] = []
+    for (const type of ['keydown', 'keypress', 'keyup']) {
+      input.addEventListener(type, e => types.push(e.type))
+    }
+    glue.submitCommand('north')
+    expect(types).toEqual(['keypress'])
+  })
+
+  it('carries the Enter code on which and charCode, not only keyCode', () => {
+    // A jQuery host derives `which` for keypress from charCode and bails on a falsy value, so all
+    // three must agree or the command is dropped.
+    makeBuffer(['x'], { withInput: true })
+    const seen: Array<{ keyCode: number; which: number; charCode: number }> = []
+    liveInput().addEventListener('keypress', e => {
+      const k = e as KeyboardEvent
+      seen.push({ keyCode: k.keyCode, which: k.which, charCode: k.charCode })
+    })
+    glue.submitCommand('north')
+    expect(seen).toEqual([{ keyCode: 13, which: 13, charCode: 13 }])
   })
 
   it('fires an input event so host listeners observe the value', () => {
