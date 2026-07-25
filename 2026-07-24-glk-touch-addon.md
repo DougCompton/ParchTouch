@@ -307,7 +307,7 @@ deployment copies `dist/` straight out of a git tag. The `dist`-currency gate in
 
 ### Tasks
 
-- [ ] **Task 0.1: Initialise the repository**
+- [x] **Task 0.1: Initialise the repository**
 
   ```bash
   mkdir glk-touch && cd glk-touch
@@ -407,7 +407,7 @@ deployment copies `dist/` straight out of a git tag. The `dist`-currency gate in
   Run: `npm install`
   Expected: `node_modules/` created; typescript, esbuild, vitest and jsdom installed; no errors.
 
-- [ ] **Task 0.2: Write failing tests for the pure command model**
+- [x] **Task 0.2: Write failing tests for the pure command model**
 
   File: `test/command-model.test.ts`
 
@@ -703,7 +703,7 @@ deployment copies `dist/` straight out of a git tag. The `dist`-currency gate in
   })
   ```
 
-- [ ] **Task 0.3: Write failing tests for the DOM glue**
+- [x] **Task 0.3: Write failing tests for the DOM glue**
 
   File: `test/dom-glue.test.ts`
 
@@ -1166,12 +1166,12 @@ deployment copies `dist/` straight out of a git tag. The `dist`-currency gate in
   })
   ```
 
-- [ ] **Task 0.4: Run tests — verify ALL fail**
+- [x] **Task 0.4: Run tests — verify ALL fail**
 
   Run: `npm test`
   Expected: every test FAILS — `Failed to resolve import '../src/command-model'` and `../src/if-buttons`.
 
-- [ ] **Task 0.5: Commit**
+- [x] **Task 0.5: Commit**
 
   ```bash
   git add -A
@@ -1246,7 +1246,7 @@ deployment copies `dist/` straight out of a git tag. The `dist`-currency gate in
 
 ### Tasks
 
-- [ ] **Task 1.1: Implement the model**
+- [x] **Task 1.1: Implement the model**
 
   File: `src/command-model.ts`
 
@@ -1404,7 +1404,7 @@ deployment copies `dist/` straight out of a git tag. The `dist`-currency gate in
   > `clearPending` takes an optional, unused parameter so callers can keep passing the current state
   > (readable at call sites, and matches the tests). `noUnusedParameters` is satisfied by the `_` prefix.
 
-- [ ] **Task 1.2: Typecheck and run the model tests**
+- [x] **Task 1.2: Typecheck and run the model tests**
 
   Run: `npm run typecheck`
   Expected: zero errors.
@@ -1412,7 +1412,7 @@ deployment copies `dist/` straight out of a git tag. The `dist`-currency gate in
   Run: `npm test -- test/command-model.test.ts`
   Expected: all PASS, 0 failures. The DOM-glue tests still fail — `src/if-buttons.ts` does not exist yet.
 
-- [ ] **Task 1.3: Commit**
+- [x] **Task 1.3: Commit**
 
   ```bash
   git add src/command-model.ts
@@ -1447,7 +1447,7 @@ host capabilities without naming any host.
 
 ### Tasks
 
-- [ ] **Task 2.1: Implement the glue**
+- [x] **Task 2.1: Implement the glue**
 
   File: `src/if-buttons.ts`
 
@@ -1937,7 +1937,7 @@ host capabilities without naming any host.
   }
   ```
 
-- [ ] **Task 2.2: Typecheck, then run the glue tests**
+- [x] **Task 2.2: Typecheck, then run the glue tests**
 
   Run: `npm run typecheck`
   Expected: zero errors.
@@ -1945,12 +1945,12 @@ host capabilities without naming any host.
   Run: `npm test -- test/dom-glue.test.ts`
   Expected: all PASS.
 
-- [ ] **Task 2.3: Run the whole suite**
+- [x] **Task 2.3: Run the whole suite**
 
   Run: `npm test`
   Expected: all PASS in both files.
 
-- [ ] **Task 2.4: Commit**
+- [x] **Task 2.4: Commit**
 
   ```bash
   git add src/if-buttons.ts
@@ -1988,7 +1988,7 @@ provides a map.
 
 ### Tasks
 
-- [ ] **Task 3.1: Write the stylesheet**
+- [x] **Task 3.1: Write the stylesheet**
 
   File: `src/if-buttons.css`
 
@@ -2122,12 +2122,12 @@ provides a map.
   }
   ```
 
-- [ ] **Task 3.2: Confirm no regressions**
+- [x] **Task 3.2: Confirm no regressions**
 
   Run: `npm test`
   Expected: all PASS (CSS isn't under test; this proves nothing broke).
 
-- [ ] **Task 3.3: Commit**
+- [x] **Task 3.3: Commit**
 
   ```bash
   git add src/if-buttons.css
