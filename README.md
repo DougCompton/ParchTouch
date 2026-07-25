@@ -28,20 +28,22 @@ to 20 seconds, so loading it last is always enough.
 
 Pick the path that matches your situation:
 
+- **[Docker — a ready-made server](#run-it-as-a-server-docker)** — one command, both players, nothing to
+  install but Docker. **Start here if you just want to play**, especially on a tablet.
 - **[A. You already run Parchment, Parchmap or another GlkOte player](#a-adding-it-to-a-player-you-already-run)** — two files, two tags, done.
 - **[B. Starting from nothing, with Parchment](#b-from-scratch-with-parchment)** — the current, maintained interpreter.
 - **[C. Starting from nothing, with Parchmap](#c-from-scratch-with-parchmap)** — adds an automatic map, route-finding and notes.
 
-Everything below assumes you are **serving over HTTP**. No GlkOte player runs from a `file://` URL, so
-`python3 -m http.server 8080` (or nginx, or Caddy) in the directory you set up is a required step, not
-an optional one.
+The manual paths (A, B, C) all assume you are **serving over HTTP**. No GlkOte player runs from a
+`file://` URL, so `python3 -m http.server 8080` (or nginx, or Caddy) in the directory you set up is a
+required step, not an optional one. The Docker image handles that for you.
 
 ### Get the two files
 
 Either way you install, you need `glk-touch.js` and `glk-touch.css`:
 
 ```bash
-git clone https://github.com/<you>/glk-touch
+git clone https://github.com/DougCompton/ParchTouch
 # dist/glk-touch.js and dist/glk-touch.css are committed — no build step needed
 ```
 
@@ -274,33 +276,90 @@ Open **`http://localhost:8080/play.html?story=games/Advent.z5.js`**, or pick the
 
 ## Run it as a server (Docker)
 
-If you want a box on your home network that just serves playable IF to a tablet, there is a Dockerfile
-that builds one. It bundles **both** players with the overlay already installed, and serves your own
-story library from a mounted volume:
+The shortest route to playable IF on a tablet: one image containing **both** players with the overlay
+already installed, serving your own story library. Nothing to install but Docker — no Node, no npm, no
+hunting down and vendoring a player by hand.
+
+### Run it
 
 ```bash
+git clone https://github.com/DougCompton/ParchTouch && cd ParchTouch
 docker build -t glk-touch .
-docker run -p 8080:80 -v /srv/if-stories:/stories:ro glk-touch
-# or:  STORIES=/srv/if-stories docker compose up -d --build
+docker run -d --name glk-touch -p 8080:80 -v /srv/if-stories:/stories:ro glk-touch
 ```
+
+Open **<http://localhost:8080/>**. From the tablet, use the server's own address on your network —
+`http://192.168.1.20:8080/` — since playing from the couch is the whole point.
+
+You do not even need a library to start:
+
+```bash
+docker run -d -p 8080:80 glk-touch      # seeds Adventure into an empty library
+```
+
+### …or with Compose
+
+`compose.yaml` is in the repo:
+
+```bash
+STORIES=/srv/if-stories docker compose up -d --build
+```
+
+| Variable | Default | What |
+|----------|---------|------|
+| `STORIES` | `./stories` | directory of story files to serve |
+| `PORT` | `8080` | host port to publish |
+
+### What you get
 
 | Path | What |
 |------|------|
-| `/` | a picker listing your library, with the right link per game — read live from the volume, so a game you drop in appears on reload |
+| `/` | a picker listing your library, with the right link per game |
 | `/parchment/play.html` | modern Parchment: Z-machine, Glulx, TADS, Hugo and SCARE |
 | `/parchmap/play.html` | Parchmap: adds the automatic map, route-finding and notes |
 
-Two things the container does for you. It **wraps** each Z-machine story into the
-`processBase64Zcode` form Parchmap's legacy core requires, so one library of raw files serves both
-players; and it **injects** your library into Parchmap's own game menu alongside the games it ships
-with. Adventure is included so a bare `docker run` plays immediately.
+### Your story library
 
-**Licence, and it matters.** These files are MIT and Parchment is MIT, but Parchmap is GPL-3.0, so the
-default image is a combined work conveyed under **GPL-3.0** — which is precisely why this addon is MIT
-rather than GPL: MIT is GPL-compatible, so the combination is lawful and these files stay MIT within it.
-Every upstream licence is copied to `/licences` in the image. For a purely MIT artifact, build with
-`--build-arg WITH_PARCHMAP=0` — that leaves Parchmap out of every layer (~200MB rather than ~385MB),
-losing only the map.
+Drop **raw, unconverted** story files into the directory you mount — `advent.z5`, `zork1.z5`,
+`Trinity.z4`, a `.zblorb`, a Glulx `.ulx`. The container reconciles the two players' disagreement about
+the same game for you: at start-up it wraps every Z-machine story into the `processBase64Zcode` form
+Parchmap's legacy core requires, and **injects your library into Parchmap's own game menu** beside the
+games it ships with. The volume is only ever read from, so mount it `:ro`.
+
+- The picker reads the library **live**, so a game you drop in appears on the next page reload.
+- A **restart** is what makes a new game reach Parchmap, since that is when the wrapping happens.
+- Glulx, TADS, Hugo and SCARE games play in Parchment. Parchmap is Z-machine only, and the picker says
+  so per game rather than offering a link that would fail.
+
+### Build options
+
+| Build arg | Default | What |
+|-----------|---------|------|
+| `WITH_PARCHMAP` | `1` | `0` leaves Parchmap out of **every layer** — a purely MIT image, ~200 MB instead of ~385 MB, losing only the map |
+| `PARCHMENT_REF` | `master` | branch or tag of Parchment to build |
+| `PARCHMAP_REF` | `main` | branch or tag of Parchmap to vendor |
+
+```bash
+docker build --build-arg WITH_PARCHMAP=0 -t glk-touch:mit .
+```
+
+To pick up a new version of the addon, rebuild and recreate the container; the addon is always built
+from your working tree. Add `--no-cache` to also refresh the upstream players.
+
+### Worth knowing
+
+- **The first build takes a few minutes.** Parchment is built from source — its published release
+  assets are a *legacy* build, not the modern AsyncGlk one — including its git submodules and every
+  wasm interpreter. Later builds reuse the cache.
+- The image has a healthcheck, so `docker ps` shows `healthy` once it is actually serving.
+- It speaks plain HTTP on port 80 inside the container. Put it behind your own reverse proxy for TLS.
+- Story files are not baked in beyond Adventure (Crowther & Woods), which is freely distributable.
+
+**Licence, and it matters here.** These files are MIT and Parchment is MIT, but Parchmap is GPL-3.0, so
+the default image is a combined work conveyed under **GPL-3.0** — which is precisely why this addon is
+MIT rather than GPL: MIT is GPL-compatible, so the combination is lawful and these files stay MIT within
+it. Every upstream licence is copied to `/licences` in the image. Build with
+`--build-arg WITH_PARCHMAP=0` for a genuinely MIT-only artifact.
 
 ## Using it
 
