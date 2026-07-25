@@ -104,6 +104,8 @@ const MOVES: ReadonlyArray<readonly [string, string]> = [
 // Candidate selectors for an OPTIONAL map panel. Deliberately generic — this is capability
 // detection, not host detection; narrow it only when a real host is verified (Task 6.5).
 const MAP_SELECTORS = '#map, #map-container, .map-container, [data-if-map]'
+// Below this, a viewport-pinned panel is moved rather than shrunk: capping its height would collapse it.
+const MIN_LIFTED_HEIGHT = 24
 
 let state: CommandState = createState()
 let bootTimer: ReturnType<typeof setTimeout> | null = null
@@ -649,6 +651,69 @@ export function buildBar(): HTMLElement {
   return bar
 }
 
+/*
+ * Give the bar its own strip of the viewport, so it cannot cover host UI.
+ *
+ * Padding .BufferWindow is enough for the story text, but only for the story text. A host is free to
+ * pin other panels to the VIEWPORT, and those ignore both body padding and anything done to the buffer.
+ * Measured on a real map-providing host at 820x1100: its map panel (fixed, top:0 bottom:0) and its game
+ * frame (fixed, top:20 bottom:20) both ran to the bottom of the screen, so the bar sat on top of the
+ * map's lower third and its own footer — "it hides the whole bottom".
+ *
+ * The rule is capability-based, not host-based (§0.2): anything pinned to the viewport that reaches
+ * into the bar's strip gets moved out of it. Which property to change depends on which edge is pinned,
+ * and getting that wrong is why the obvious attempts fail:
+ *   - top pinned AND tall enough  -> cap max-height. Setting `bottom` alone does nothing, because an
+ *     element with both top and height set is over-constrained and `bottom` is ignored.
+ *   - top pinned but short        -> shift `top` up instead, since capping height would collapse it.
+ *   - top auto (bottom-anchored)  -> raise `bottom`.
+ *
+ * Every run first undoes its own previous work, so it always measures the host's natural layout and
+ * stays correct across resizes, rotations and bar-height changes. Failures are swallowed per element:
+ * a host layout we cannot help is left exactly as it was rather than half-adjusted.
+ */
+function reserveViewportBottom(barTop: number, barHeight: number): void {
+  // Undo the previous pass so what we measure below is the host's own layout, not ours.
+  for (const el of document.querySelectorAll<HTMLElement>('[data-ifb-lifted]')) {
+    el.style.removeProperty('max-height')
+    el.style.removeProperty('bottom')
+    el.style.removeProperty('top')
+    el.removeAttribute('data-ifb-lifted')
+  }
+  if (barHeight <= 0) { return }
+
+  const bar = document.getElementById('ifb-bar')
+  const candidates: HTMLElement[] = [document.body, ...document.querySelectorAll<HTMLElement>('body *')]
+
+  for (const el of candidates) {
+    try {
+      if (el === bar || bar?.contains(el)) { continue }
+      const cs = window.getComputedStyle(el)
+      if (cs.position !== 'fixed') { continue }        // only the viewport-pinned can ignore everything else
+
+      const rect = el.getBoundingClientRect()
+      const overlap = rect.bottom - barTop
+      if (overlap <= 1 || rect.height < 8) { continue }
+
+      const topPinned = cs.top !== 'auto'
+      if (topPinned && rect.height - overlap >= MIN_LIFTED_HEIGHT) {
+        el.style.setProperty('max-height', Math.round(rect.height - overlap) + 'px', 'important')
+      } else if (topPinned) {
+        // Too short to shrink without collapsing it, so move it instead.
+        const top = Number.parseFloat(cs.top)
+        if (!Number.isFinite(top)) { continue }
+        el.style.setProperty('top', Math.round(top - overlap) + 'px', 'important')
+      } else {
+        const bottom = Number.parseFloat(cs.bottom)
+        el.style.setProperty('bottom', Math.round((Number.isFinite(bottom) ? bottom : 0) + barHeight) + 'px', 'important')
+      }
+      el.setAttribute('data-ifb-lifted', '1')
+    } catch {
+      // A host layout we cannot adjust is left alone. Degrade, never throw (§0.2).
+    }
+  }
+}
+
 /**
  * Reserve exactly as much room for the bar as it actually occupies.
  *
@@ -681,6 +746,9 @@ export function measureBar(): number {
   const wasAtEnd = bw !== null && bw.scrollHeight - bw.scrollTop - bw.clientHeight < 4
   root.style.setProperty('--ifb-bar-height', next)
   if (bw && wasAtEnd) { bw.scrollTop = bw.scrollHeight }
+
+  // The padding above only moves the story text. Host panels pinned to the viewport need moving too.
+  reserveViewportBottom(bar.getBoundingClientRect().top, height)
   return height
 }
 

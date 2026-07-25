@@ -118,6 +118,34 @@ test.describe('real Parchmap (legacy core + auto-map)', () => {
     await expect(page.locator('.Input.LineInput')).toHaveValue('')
   })
 
+  test('the bar does not cover the map or the game frame', async ({ page }) => {
+    /*
+     * The regression this exists for: this host pins its map panel (fixed, top:0 bottom:0) and its game
+     * frame (fixed, top:20 bottom:20) to the VIEWPORT. Padding .BufferWindow does nothing for those, so
+     * the bar sat over the map's lower third and the host's own footer — "it hides the whole bottom".
+     *
+     * Note the fix must SHRINK them, not move them: both have a fixed height, so shifting `top` up
+     * clears the bar but pushes an equal number of pixels off the top of the screen instead (measured:
+     * 148px of the map, 108px of the game frame).
+     */
+    const m = await page.evaluate(() => {
+      const bar = document.getElementById('ifb-bar')!.getBoundingClientRect()
+      const edge = (sel: string) => {
+        const el = document.querySelector(sel)
+        if (!el) { return null }
+        const r = el.getBoundingClientRect()
+        return { belowBar: Math.round(r.bottom - bar.top), clippedAbove: Math.max(0, -Math.round(r.top)) }
+      }
+      return { map: edge('#map'), game: edge('#parchment'), lifted: document.querySelectorAll('[data-ifb-lifted]').length }
+    })
+    expect(m.lifted).toBeGreaterThan(0)          // this host needs the adjustment
+    for (const panel of [m.map, m.game]) {
+      expect(panel).not.toBeNull()
+      expect(panel!.belowBar).toBeLessThanOrEqual(1)    // nothing under the bar
+      expect(panel!.clippedAbove).toBe(0)               // and nothing pushed off the top either
+    }
+  })
+
   test('the map toggle collapses and restores the map (P6-AC4)', async ({ page }) => {
     const toggle = page.locator('#ifb-bar .ifb-maptoggle')
     await expect(page.locator('#map')).toBeVisible()

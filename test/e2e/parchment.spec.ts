@@ -162,6 +162,12 @@ test.describe('real Parchment (AsyncGlk)', () => {
     expect(gap).toBeGreaterThanOrEqual(100)
   })
 
+  test('needs no viewport adjustment, and gets none', async ({ page }) => {
+    // The counterpart to the Parchmap case: this host pins nothing to the viewport bottom, so the
+    // generic rule must leave it completely alone rather than mutating layout for no reason.
+    expect(await page.evaluate(() => document.querySelectorAll('[data-ifb-lifted]').length)).toBe(0)
+  })
+
   test('makes no third-party network requests (P5-AC6)', async ({ page }) => {
     const external: string[] = []
     page.on('request', r => {

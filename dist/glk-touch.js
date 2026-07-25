@@ -149,6 +149,7 @@
     ["Down", "down"]
   ];
   var MAP_SELECTORS = "#map, #map-container, .map-container, [data-if-map]";
+  var MIN_LIFTED_HEIGHT = 24;
   var state = createState();
   var bootTimer = null;
   var barSizeObserver = null;
@@ -575,6 +576,50 @@
     watchBarSize(bar);
     return bar;
   }
+  function reserveViewportBottom(barTop, barHeight) {
+    for (const el of document.querySelectorAll("[data-ifb-lifted]")) {
+      el.style.removeProperty("max-height");
+      el.style.removeProperty("bottom");
+      el.style.removeProperty("top");
+      el.removeAttribute("data-ifb-lifted");
+    }
+    if (barHeight <= 0) {
+      return;
+    }
+    const bar = document.getElementById("ifb-bar");
+    const candidates = [document.body, ...document.querySelectorAll("body *")];
+    for (const el of candidates) {
+      try {
+        if (el === bar || (bar == null ? void 0 : bar.contains(el))) {
+          continue;
+        }
+        const cs = window.getComputedStyle(el);
+        if (cs.position !== "fixed") {
+          continue;
+        }
+        const rect = el.getBoundingClientRect();
+        const overlap = rect.bottom - barTop;
+        if (overlap <= 1 || rect.height < 8) {
+          continue;
+        }
+        const topPinned = cs.top !== "auto";
+        if (topPinned && rect.height - overlap >= MIN_LIFTED_HEIGHT) {
+          el.style.setProperty("max-height", Math.round(rect.height - overlap) + "px", "important");
+        } else if (topPinned) {
+          const top = Number.parseFloat(cs.top);
+          if (!Number.isFinite(top)) {
+            continue;
+          }
+          el.style.setProperty("top", Math.round(top - overlap) + "px", "important");
+        } else {
+          const bottom = Number.parseFloat(cs.bottom);
+          el.style.setProperty("bottom", Math.round((Number.isFinite(bottom) ? bottom : 0) + barHeight) + "px", "important");
+        }
+        el.setAttribute("data-ifb-lifted", "1");
+      } catch (e) {
+      }
+    }
+  }
   function measureBar() {
     const bar = document.getElementById("ifb-bar");
     if (!bar) {
@@ -595,6 +640,7 @@
     if (bw && wasAtEnd) {
       bw.scrollTop = bw.scrollHeight;
     }
+    reserveViewportBottom(bar.getBoundingClientRect().top, height);
     return height;
   }
   function watchBarSize(bar) {
