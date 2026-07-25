@@ -1,0 +1,127 @@
+/*
+ * if-buttons.css — styling for the glk-touch overlay.
+ *
+ * SPDX-License-Identifier: MIT
+ * Copyright (c) 2026 Doug Compton
+ *
+ * Constraints, all tablet-driven:
+ *   - every target >= 44px (comfortable tap size on iOS and Android)
+ *   - the fixed bar must NOT cover story text -> .BufferWindow gets matching bottom padding
+ *   - respect the home-indicator inset via env(safe-area-inset-bottom)
+ *   - "armed" (a verb waiting for a noun) must be obvious at a glance
+ *   - the bar scrolls internally on small viewports instead of growing without bound
+ *   - hosts vary in theme, so colours come from custom properties and can be overridden by the
+ *     embedding page without editing this file
+ */
+
+:root {
+  --ifb-bar-height: 190px;
+  --ifb-bg: rgba(24, 24, 24, 0.94);
+  --ifb-btn: #2c2c2c;
+  --ifb-btn-active: #444;
+  --ifb-armed: #0a63c2;
+  --ifb-armed-border: #4c9be8;
+  --ifb-text: #eee;
+  --ifb-border: #555;
+}
+
+#ifb-bar {
+  position: fixed;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  z-index: 9999;
+  box-sizing: border-box;
+  max-height: 45vh;
+  overflow-y: auto;
+  padding: 8px 8px calc(8px + env(safe-area-inset-bottom, 0px));
+  display: flex;
+  flex-wrap: wrap;
+  gap: 10px;
+  justify-content: center;
+  align-items: flex-start;
+  background: var(--ifb-bg);
+  border-top: 1px solid var(--ifb-border);
+  font-family: system-ui, -apple-system, "Segoe UI", sans-serif;
+  touch-action: manipulation;   /* stop double-tap-to-zoom stealing taps */
+}
+
+.ifb-group { display: flex; flex-wrap: wrap; gap: 6px; justify-content: center; }
+
+/* compass as a 3-wide grid; Up/Down wrap onto the end naturally */
+.ifb-moves {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(52px, 1fr));
+  gap: 6px;
+  flex: 0 0 auto;
+}
+
+.ifb {
+  min-width: 52px;
+  min-height: 44px;
+  padding: 6px 12px;
+  border: 1px solid var(--ifb-border);
+  border-radius: 8px;
+  background: var(--ifb-btn);
+  color: var(--ifb-text);
+  font-size: 15px;
+  line-height: 1.2;
+  cursor: pointer;
+  -webkit-tap-highlight-color: transparent;
+  user-select: none;
+}
+.ifb:active { background: var(--ifb-btn-active); }
+.ifb:focus-visible { outline: 2px solid var(--ifb-armed-border); outline-offset: 2px; }
+
+.ifb.ifb-armed,
+.ifb-word.ifb-armed {
+  background: var(--ifb-armed);
+  border-color: var(--ifb-armed-border);
+  color: #fff;
+}
+
+.ifb-cancel { font-size: 18px; }
+.ifb-editverbs, .ifb-maptoggle { font-size: 17px; }
+
+/* Tappable story words: no permanent decoration (that would wreck the prose), only feedback. */
+.ifb-word { cursor: pointer; border-radius: 3px; padding: 1px 0; }
+.ifb-word:active { background: var(--ifb-armed); color: #fff; }
+
+/* Reserve room so the fixed bar never hides the latest output. The host owns .BufferWindow's
+   layout, so only padding is touched. */
+.BufferWindow { padding-bottom: var(--ifb-bar-height) !important; }
+
+/* Verb editor — hidden until ⚙ is tapped, so it costs no space during play. */
+#ifb-editor { display: none; flex: 1 0 100%; padding: 8px 0 0; border-top: 1px solid #3a3a3a; }
+#ifb-editor.ifb-open { display: block; }
+.ifb-editrow { display: flex; gap: 6px; flex-wrap: wrap; margin-bottom: 8px; }
+.ifb-newverb {
+  flex: 1 1 160px;
+  min-height: 44px;
+  padding: 6px 10px;
+  font-size: 16px;                 /* >=16px stops iOS zooming the page on focus */
+  border: 1px solid var(--ifb-border);
+  border-radius: 8px;
+  background: #1e1e1e;
+  color: var(--ifb-text);
+}
+.ifb-verblist { display: flex; gap: 6px; flex-wrap: wrap; }
+.ifb-verbchip { font-size: 14px; }
+
+/* A host that provides a map (optional capability): give the bar less vertical room and allow the
+   map to be collapsed for reading. .ifb-host-map is set by if-buttons.ts on detection. */
+.ifb-host-map { --ifb-bar-height: 150px; }
+.ifb-host-map #ifb-bar { max-height: 38vh; }
+.ifb-host-map .ifb { min-height: 40px; font-size: 14px; }
+.ifb-map-collapsed .ifb-maptoggle {
+  background: var(--ifb-armed);
+  border-color: var(--ifb-armed-border);
+  color: #fff;
+}
+
+/* Landscape phones / short viewports: shrink the reserved strip. */
+@media (max-height: 500px) {
+  :root { --ifb-bar-height: 130px; }
+  #ifb-bar { max-height: 40vh; }
+  .ifb { min-height: 40px; padding: 4px 10px; font-size: 14px; }
+}
