@@ -15,7 +15,28 @@
  */
 
 :root {
-  --ifb-bar-height: 190px;
+  /* Touch target and spacing, in one place because the bar's height is derived from them. */
+  --ifb-btn-h: 44px;
+  --ifb-gap: 6px;
+
+  /*
+   * THE BAR IS AT MOST THREE BUTTONS TALL. Anything beyond that scrolls inside the bar rather than
+   * growing it, so the overlay can never eat more than a known slice of the screen.
+   */
+  --ifb-rows: 3;
+  --ifb-bar-max: calc(
+    var(--ifb-rows) * var(--ifb-btn-h) + (var(--ifb-rows) - 1) * var(--ifb-gap) + 16px
+  );
+
+  /*
+   * How much room the story text reserves for the bar. if-buttons.ts overwrites this with the bar's
+   * MEASURED height as an inline style on <html>, so the reservation is always exact — a fixed guess
+   * under-reserved badly (a 369px bar against a 190px guess left 173px of output permanently hidden
+   * beneath the overlay, unreachable because the buffer was already scrolled to the bottom).
+   * This value is only the no-JS fallback.
+   */
+  --ifb-bar-height: var(--ifb-bar-max);
+
   --ifb-bg: rgba(24, 24, 24, 0.94);
   --ifb-btn: #2c2c2c;
   --ifb-btn-active: #444;
@@ -32,33 +53,80 @@
   bottom: 0;
   z-index: 9999;
   box-sizing: border-box;
-  max-height: 45vh;
+  /* Three button rows, never more. Extra controls scroll inside the bar. */
+  max-height: calc(var(--ifb-bar-max) + env(safe-area-inset-bottom, 0px));
   overflow-y: auto;
+  overscroll-behavior: contain;   /* scrolling the bar must not scroll the story behind it */
   padding: 8px 8px calc(8px + env(safe-area-inset-bottom, 0px));
+  /* Column: the control row, then the verb editor panel beneath it when open. */
   display: flex;
-  flex-wrap: wrap;
-  gap: 10px;
-  justify-content: center;
-  align-items: flex-start;
+  flex-direction: column;
+  align-items: stretch;
+  gap: var(--ifb-gap);
   background: var(--ifb-bg);
   border-top: 1px solid var(--ifb-border);
   font-family: system-ui, -apple-system, "Segoe UI", sans-serif;
   touch-action: manipulation;   /* stop double-tap-to-zoom stealing taps */
 }
 
-.ifb-group { display: flex; flex-wrap: wrap; gap: 6px; justify-content: center; }
+.ifb-group { display: flex; flex-wrap: wrap; gap: var(--ifb-gap); justify-content: center; }
 
-/* compass as a 3-wide grid; Up/Down wrap onto the end naturally */
+/*
+ * The movement pad: FIRST in the bar, always at the left, and placed explicitly rather than left to
+ * flow. Everything else in the bar sits to its right.
+ *
+ *     NW   N   NE   Up
+ *     W    ↵    E    Down
+ *     SW   S   SE   ⚙
+ *
+ * Explicit placement, for three reasons. It reads as a real direction pad — letting the items flow
+ * into columns put W and E next to SW, which looks like a grid of words. It fills the centre cell with
+ * ↵ instead of wasting it. And it fits the three-row budget exactly, with Up/Down and the settings
+ * gear forming a fourth column rather than wrapping onto a fourth row.
+ *
+ * DOM order is the ten directions, then ↵, then the gear — so the nth-child indices below address
+ * the directions, and the two extras are addressed by class.
+ */
 .ifb-moves {
   display: grid;
-  grid-template-columns: repeat(3, minmax(52px, 1fr));
-  gap: 6px;
+  grid-template-columns: repeat(4, minmax(52px, auto));
+  grid-template-rows: repeat(3, auto);
+  gap: var(--ifb-gap);
   flex: 0 0 auto;
+  order: -1;              /* the pad stays leftmost even if the bar's children are reordered */
 }
+.ifb-moves .ifb-move:nth-child(1) { grid-area: 1 / 1; }   /* NW */
+.ifb-moves .ifb-move:nth-child(2) { grid-area: 1 / 2; }   /* N  */
+.ifb-moves .ifb-move:nth-child(3) { grid-area: 1 / 3; }   /* NE */
+.ifb-moves .ifb-move:nth-child(4) { grid-area: 2 / 1; }   /* W  */
+.ifb-moves .ifb-move:nth-child(5) { grid-area: 2 / 3; }   /* E  */
+.ifb-moves .ifb-move:nth-child(6) { grid-area: 3 / 1; }   /* SW */
+.ifb-moves .ifb-move:nth-child(7) { grid-area: 3 / 2; }   /* S  */
+.ifb-moves .ifb-move:nth-child(8) { grid-area: 3 / 3; }   /* SE */
+.ifb-moves .ifb-move:nth-child(9) { grid-area: 1 / 4; }   /* Up */
+.ifb-moves .ifb-move:nth-child(10) { grid-area: 2 / 4; }  /* Down */
+.ifb-moves .ifb-enter { grid-area: 2 / 2; }               /* ↵ Enter, the centre of the pad */
+.ifb-moves .ifb-editverbs { grid-area: 3 / 4; }           /* ⚙ settings */
+
+/*
+ * The control row: pad first at the left, then everything else to its right. nowrap is the point —
+ * with wrapping, the verb and command groups fell BELOW the pad once they ran out of width. They wrap
+ * INTERNALLY instead, and min-width:0 is what lets them shrink far enough to do so rather than
+ * overflowing the bar sideways.
+ */
+.ifb-row {
+  display: flex;
+  flex-wrap: nowrap;
+  align-items: flex-start;
+  justify-content: flex-start;
+  gap: 10px;
+}
+#ifb-bar .ifb-verbs,
+#ifb-bar .ifb-cmds { flex: 1 1 auto; min-width: 0; align-content: flex-start; justify-content: flex-start; }
 
 .ifb {
   min-width: 52px;
-  min-height: 44px;
+  min-height: var(--ifb-btn-h);
   padding: 6px 12px;
   border: 1px solid var(--ifb-border);
   border-radius: 8px;
@@ -82,6 +150,8 @@
 
 .ifb-cancel { font-size: 18px; }
 .ifb-editverbs, .ifb-maptoggle { font-size: 17px; }
+/* ↵ sits in the middle of the direction pad; sized with the other icon-only controls. */
+.ifb-enter { font-size: 18px; }
 
 /* Tappable story words: no permanent decoration (that would wreck the prose), only feedback. */
 .ifb-word { cursor: pointer; border-radius: 3px; padding: 1px 0; }
@@ -108,20 +178,20 @@
 .ifb-verblist { display: flex; gap: 6px; flex-wrap: wrap; }
 .ifb-verbchip { font-size: 14px; }
 
-/* A host that provides a map (optional capability): give the bar less vertical room and allow the
-   map to be collapsed for reading. .ifb-host-map is set by if-buttons.ts on detection. */
-.ifb-host-map { --ifb-bar-height: 150px; }
-.ifb-host-map #ifb-bar { max-height: 38vh; }
-.ifb-host-map .ifb { min-height: 40px; font-size: 14px; }
+/* A host that provides a map (optional capability): smaller targets so the prose keeps more room, and
+   the map can be collapsed for reading. .ifb-host-map is set by if-buttons.ts on detection.
+   The three-row cap and the reservation both follow --ifb-btn-h automatically. */
+.ifb-host-map { --ifb-btn-h: 40px; }
+.ifb-host-map .ifb { font-size: 14px; }
 .ifb-map-collapsed .ifb-maptoggle {
   background: var(--ifb-armed);
   border-color: var(--ifb-armed-border);
   color: #fff;
 }
 
-/* Landscape phones / short viewports: shrink the reserved strip. */
+/* Landscape phones / short viewports: smaller targets, and only two rows before scrolling, so the
+   bar cannot swallow a short screen. Both the cap and the reservation follow from these. */
 @media (max-height: 500px) {
-  :root { --ifb-bar-height: 130px; }
-  #ifb-bar { max-height: 40vh; }
-  .ifb { min-height: 40px; padding: 4px 10px; font-size: 14px; }
+  :root { --ifb-btn-h: 40px; --ifb-rows: 2; }
+  .ifb { padding: 4px 10px; font-size: 14px; }
 }

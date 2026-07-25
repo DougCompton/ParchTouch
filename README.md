@@ -10,18 +10,267 @@ tappable — so a whole session needs zero keystrokes.
 
 MIT licensed. **Zero runtime dependencies**, no framework, one plain `<script>` tag.
 
+---
+
 ## Install
 
-Two tags, added before `</body>` and after the host's own scripts:
+The addon itself is always the same two tags, added **before `</body>`** and **after the host's own
+scripts**:
 
 ```html
 <link rel="stylesheet" href="glk-touch.css">
 <script src="glk-touch.js"></script>
 ```
 
-That is the whole installation — no module loader, no import map, no host-specific configuration.
-Copy `dist/glk-touch.js` and `dist/glk-touch.css` out of a release tag. Full notes, including
-per-host specifics and theming, are in [docs/INSTALL.md](docs/INSTALL.md).
+No module loader, no import map, no host-specific configuration. Order matters only because the host
+must have created its `.BufferWindow` before the bar can attach — and even then the addon polls for up
+to 20 seconds, so loading it last is always enough.
+
+Pick the path that matches your situation:
+
+- **[A. You already run Parchment, Parchmap or another GlkOte player](#a-adding-it-to-a-player-you-already-run)** — two files, two tags, done.
+- **[B. Starting from nothing, with Parchment](#b-from-scratch-with-parchment)** — the current, maintained interpreter.
+- **[C. Starting from nothing, with Parchmap](#c-from-scratch-with-parchmap)** — adds an automatic map, route-finding and notes.
+
+Everything below assumes you are **serving over HTTP**. No GlkOte player runs from a `file://` URL, so
+`python3 -m http.server 8080` (or nginx, or Caddy) in the directory you set up is a required step, not
+an optional one.
+
+### Get the two files
+
+Either way you install, you need `glk-touch.js` and `glk-touch.css`:
+
+```bash
+git clone https://github.com/<you>/glk-touch
+# dist/glk-touch.js and dist/glk-touch.css are committed — no build step needed
+```
+
+`dist/` is committed deliberately, so you can copy the two files straight out of a checkout or a git
+tag. If you would rather build them yourself: `npm install && npm run build`.
+
+---
+
+### A. Adding it to a player you already run
+
+1. Copy `dist/glk-touch.js` and `dist/glk-touch.css` next to the host's own assets.
+2. Open the page the game is played on and add the two tags before `</body>`, after every one of the
+   host's scripts. Adjust the two `href`/`src` paths to wherever you put the files.
+3. Reload. A command bar appears at the bottom, and words in the story text become tappable.
+
+That is the whole change. Nothing about the host's own configuration, story library or markup needs to
+change, and the addon adds exactly one global (`window.IFButtons`, a console debugging handle).
+
+Host-specific notes:
+
+| Host | Where to add the tags |
+|------|-----------------------|
+| **Parchment** | after `web.js` in `index.html` (or your own play page) |
+| **Parchmap** | in `play.html`, after all of `js/*.js` — the addon then detects the map panel automatically, compacts the bar and adds a **⊞** button to collapse the map |
+| **Anything else GlkOte-based** | last in `<body>`; nothing else is required |
+
+If the bar does not appear, open the console and run `IFButtons.inputMode()` — the
+[troubleshooting table](docs/INSTALL.md#troubleshooting) explains each answer.
+
+---
+
+### B. From scratch with Parchment
+
+[Parchment](https://github.com/curiousdannii/parchment) is MIT-licensed and actively maintained. It is
+the reference host for this addon.
+
+#### 1. Get a Parchment web build
+
+You need the `dist/web/` layout — `web.js`, `web.css`, `jquery.min.js`, `ie.js`, plus the interpreter
+engines it loads on demand (`bocfel.js` + `bocfel.wasm` for Z-machine; `glulxe.js`/`quixe.js` for
+Glulx), `waiting.gif`, and `dist/fonts/` (optional — without it the game plays fine but the console
+logs font 404s).
+
+**Build it from source** — this is the reliable route, and produces every engine:
+
+```bash
+git clone https://github.com/curiousdannii/parchment
+cd parchment
+npm install
+npm run build          # produces dist/web/
+```
+
+> **Do not use the GitHub release assets for this.** Verified against the 2025.1.14 release:
+> `parchment-for-inform7-*.zip` contains a *legacy* build (flat `parchment.js`, JSONP story loading —
+> not the modern AsyncGlk core), and `parchment-single-file-*.zip` is one self-contained 5 MB
+> `parchment.html`. Neither has the `dist/web/` layout. See
+> [docs/COMPATIBILITY.md](docs/COMPATIBILITY.md).
+
+#### 2. Lay out a directory to serve
+
+```
+site/
+  index.html                 <- Parchment's own page, from the build
+  dist/web/                  <- copied from the Parchment build
+      web.js  web.css  jquery.min.js  ie.js
+      bocfel.js  bocfel.wasm  waiting.gif
+  dist/fonts/                <- optional; silences console 404s
+  glk-touch.js               <- from this repo's dist/
+  glk-touch.css
+  stories/
+      advent.z5              <- your story files, raw and unwrapped
+```
+
+Story files stay **same-origin** (`stories/…`), which keeps Parchment from routing them through its
+CORS proxy — so the whole thing works offline.
+
+#### 3. Add the addon — either to Parchment's own page, or to your own
+
+**Simplest: use the `index.html` that came with the build.** Add the two tags to it and change nothing
+else:
+
+```html
+    <link rel="stylesheet" href="glk-touch.css">   <!-- before </head> -->
+</head>
+...
+    <script src="glk-touch.js"></script>           <!-- before </body> -->
+</body>
+```
+
+That page already has everything Parchment needs, including its story-picker UI. Both this and the
+minimal page below are verified working.
+
+**Or write your own minimal play page** — useful if you want to drop the picker and go straight into a
+story. Save as `play.html`:
+
+```html
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>IF</title>
+
+<script>
+  // Options that exist in the current build. Note the story is NOT set here — see step 4.
+  window.parchment_options = { use_proxy: 0 }
+</script>
+
+<link rel="stylesheet" href="dist/web/web.css">
+<link rel="stylesheet" href="glk-touch.css">
+</head>
+<body>
+<div id="gameport">
+  <div id="about"></div>
+  <div id="windowport"></div>
+  <div id="loadingpane" style="display:none"><em>Loading…</em></div>
+  <div id="errorpane" style="display:none"><div id="errorcontent"></div></div>
+</div>
+
+<script src="dist/web/jquery.min.js"></script>
+<script src="dist/web/ie.js" nomodule></script>
+<script src="dist/web/web.js" type="module"></script>
+
+<!-- glk-touch: last, after the host's scripts -->
+<script src="glk-touch.js"></script>
+</body>
+</html>
+```
+
+`web.js` is a module, which is exactly why the addon can be a plain classic script loaded afterwards —
+it never joins the host's module graph.
+
+#### 4. Serve it, and open a story
+
+```bash
+cd site && python3 -m http.server 8080
+```
+
+Then open **`http://localhost:8080/play.html?story=stories/advent.z5`** (or `index.html?story=…` if you
+took the simpler route above).
+
+> **`?story=` must be a path, not a bare filename.** The current build reads the story from the page's
+> own query string. A bare `?story=advent.z5` does not merely 404 — Parchment derives its loading-pane
+> title with `/([/=])([^/=]+)$/.exec(path)[2]`, which is `null` for a string containing no `/` or `=`,
+> so the page dies with `TypeError: Cannot read properties of null (reading '2')` before it fetches
+> anything. Always include the directory: `?story=stories/advent.z5`.
+>
+> The older `parchment_options` keys `default_story`, `lock_story`, `lock_options` and `story_name`
+> **no longer exist** in this build.
+
+Tap a compass direction. If the game moves, you are done.
+
+---
+
+### C. From scratch with Parchmap
+
+[Parchmap](https://github.com/roylaza/Parchmap) is **GPL-3.0**. It bundles an older Parchment core plus
+an automatic map, route-finding and notes. This addon stays MIT; MIT is GPL-compatible, so the
+*combination* is conveyed under GPL-3.0 while these files remain MIT.
+
+#### 1. Clone it and turn off Analytics
+
+```bash
+git clone --depth 1 https://github.com/roylaza/Parchmap site
+cd site
+```
+
+Then edit `js/Consts.js`:
+
+```js
+const GA_TRACK = false;   // ships as true — it phones home and stalls page load when offline
+```
+
+Do this **before serving anything**, especially on a LAN.
+
+#### 2. Add the addon
+
+Copy `glk-touch.js` and `glk-touch.css` into the Parchmap directory, then add the two tags to
+`play.html` immediately before `</body>` — after all of Parchmap's own `js/*.js`:
+
+```html
+  <link rel="stylesheet" href="glk-touch.css">
+  <script src="glk-touch.js"></script>
+</body>
+```
+
+The addon finds Parchmap's `#map` panel by generic capability detection, compacts the bar to leave the
+prose room, and adds a **⊞** button that collapses the map.
+
+#### 3. Add stories — these must be JS-wrapped
+
+Parchmap's bundled core does **not** load raw story files. Its catalogue ships 298 games all named like
+`Advent.z5.js`, and each is a single line:
+
+```js
+processBase64Zcode('<the story file, base64-encoded>');
+```
+
+To add your own story, wrap it:
+
+```bash
+node -e "const fs=require('fs');const b=fs.readFileSync('advent.z5').toString('base64');fs.writeFileSync('games/Advent.z5.js',\"processBase64Zcode('\"+b+\"');\")"
+```
+
+To make it appear in the menu, add an entry to `js/GameList.js`:
+
+```js
+{
+    Title: "Adventure",
+    Subtitle: "aka Colossal Cave",
+    Author: "Crowther & Woods",
+    Filename: "Advent.z5.js"
+},
+```
+
+#### 4. Serve it and play
+
+```bash
+python3 -m http.server 8080
+```
+
+Open **`http://localhost:8080/play.html?story=games/Advent.z5.js`**, or pick the game from the menu at
+`index.html`.
+
+> On a legacy core like this one, the opening text often paginates, and **the first tap may be consumed
+> dismissing the pager** rather than sending a command. That is deliberate: a command sent while the
+> pager is showing would be swallowed by the host. Tap again.
+
+---
 
 ## Using it
 
@@ -30,6 +279,8 @@ per-host specifics and theming, are in [docs/INSTALL.md](docs/INSTALL.md).
   order works, and **✕** cancels. Tapping the word the game actually printed is exact, so there is no
   guessing at nouns.
 - **Edit the verbs:** **⚙** adds, removes, or restores the defaults. Saved per browser.
+
+Theming, the full troubleshooting table and per-host notes are in [docs/INSTALL.md](docs/INSTALL.md).
 
 ## How it works
 
@@ -43,12 +294,12 @@ documented DOM contract:
 | `.BufferLine` | the unit of word tokenization |
 | `.Input.LineInput` (or bare `.Input`) | command submission, and the positive test for line mode |
 | `.MorePrompt` | paging indicator — dismissed before submitting, so no command is swallowed |
+| `.Style_input` | echoed player input — deliberately *not* made tappable |
 
 Two details worth knowing, both established by testing real builds rather than assumed: the line input
 is a **`<textarea>`** in current AsyncGlk (so the selector must not insist on `input.`), and the command
 is submitted with a **`keypress` only** — adding `keydown` makes a legacy jQuery-based host clear its
 field and submit an empty command. See [docs/COMPATIBILITY.md](docs/COMPATIBILITY.md).
-| `.Style_input` | echoed player input — deliberately *not* made tappable |
 
 Because that contract is what makes a host a host, one bundle serves any GlkOte player. The addon
 **never names a specific host** and never branches on "which host am I in?" — every host-specific
@@ -76,8 +327,8 @@ but not real touch input or the software keyboard.
 
 ```bash
 npm install
-npm test                    # 103 unit tests, vitest + jsdom
-npm run test:e2e            # 49 end-to-end tests x (Chromium + WebKit), real hosts
+npm test                    # unit tests, vitest + jsdom
+npm run test:e2e            # end-to-end, Chromium + WebKit, against real hosts
 npm run typecheck           # tsc --noEmit; esbuild strips types but does not check them
 npm run lint:independence   # fails if src/ names a specific host
 npm run build               # dist/glk-touch.js (IIFE) + dist/glk-touch.css

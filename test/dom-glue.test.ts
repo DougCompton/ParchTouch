@@ -435,6 +435,158 @@ describe('verb list persistence and editing', () => {
   })
 })
 
+describe('pressEnter', () => {
+  let glue: Glue
+  beforeEach(async () => { glue = await loadGlue() })
+
+  it('presses Return on the field without changing what is in it', () => {
+    makeBuffer(['x'], { withInput: true })
+    const input = liveInput()
+    input.value = 'take lamp'          // half-typed, or left there by the host
+    const seen: string[] = []
+    input.addEventListener('keypress', e => seen.push(String((e as KeyboardEvent).keyCode)))
+    expect(glue.pressEnter()).toBe(true)
+    expect(input.value).toBe('take lamp')   // submitted AS IS — never rewritten
+    expect(seen).toEqual(['13'])
+  })
+
+  it('submits an empty field without throwing', () => {
+    makeBuffer(['x'], { withInput: true })
+    expect(glue.pressEnter()).toBe(true)
+    expect(liveInput().value).toBe('')
+  })
+
+  it('advances a char prompt instead, and reports nothing was submitted', () => {
+    const bw = makeBuffer(['Press any key.'])
+    const seen: number[] = []
+    bw.addEventListener('keypress', e => seen.push((e as KeyboardEvent).keyCode))
+    expect(glue.pressEnter()).toBe(false)
+    expect(seen).toEqual([13])
+  })
+
+  it('dismisses a pager instead, and reports nothing was submitted', () => {
+    makeBuffer(['x'], { withInput: true, withMore: true })
+    expect(glue.pressEnter()).toBe(false)
+    expect(liveInput().value).toBe('')
+  })
+
+  it('does not disturb an armed verb — it is a keyboard passthrough, not a command', () => {
+    const bw = makeBuffer(['a lamp'], { withInput: true })
+    glue.decorateBuffer(bw)
+    glue.buildBar()
+    const take = [...document.querySelectorAll<HTMLButtonElement>('#ifb-bar .ifb-verb')]
+      .find(b => /^take$/i.test(b.textContent ?? ''))
+    take?.click()
+    expect(glue.currentState().pendingVerb).toBe('take')
+    glue.pressEnter()
+    expect(glue.currentState().pendingVerb).toBe('take')
+  })
+
+  it('does not throw when there is no input and no buffer at all', () => {
+    expect(() => glue.pressEnter()).not.toThrow()
+    expect(glue.pressEnter()).toBe(false)
+  })
+})
+
+describe('movement pad composition', () => {
+  let glue: Glue
+  beforeEach(async () => { glue = await loadGlue() })
+
+  it('puts ↵ and the settings gear inside the pad, not the verb strip', () => {
+    glue.buildBar()
+    expect(document.querySelector('#ifb-bar .ifb-moves .ifb-enter')).not.toBe(null)
+    expect(document.querySelector('#ifb-bar .ifb-moves .ifb-editverbs')).not.toBe(null)
+    // The gear used to live with the verbs and be re-created on every re-render.
+    expect(document.querySelector('#ifb-bar .ifb-verbs .ifb-editverbs')).toBe(null)
+  })
+
+  it('keeps exactly one settings gear across verb re-renders', () => {
+    glue.buildBar()
+    glue.addVerbFromUI('dig')
+    glue.removeVerbFromUI('dig')
+    glue.renderVerbs()
+    expect(document.querySelectorAll('#ifb-bar .ifb-editverbs').length).toBe(1)
+  })
+
+  it('leaves .ifb-move as the ten directions only', () => {
+    glue.buildBar()
+    // Enter and the gear share the pad but must not be mistaken for directions.
+    expect([...document.querySelectorAll('#ifb-bar .ifb-move')].map(b => b.textContent))
+      .toEqual(['NW', 'N', 'NE', 'W', 'E', 'SW', 'S', 'SE', 'Up', 'Down'])
+  })
+
+  it('the pad is the first group in the bar', () => {
+    glue.buildBar()
+    const groups = [...document.querySelectorAll('#ifb-bar .ifb-group')]
+    expect(groups[0]?.classList.contains('ifb-moves')).toBe(true)
+  })
+
+  it('gives ↵ an accessible name', () => {
+    glue.buildBar()
+    expect(document.querySelector('#ifb-bar .ifb-enter')?.getAttribute('aria-label')).toBeTruthy()
+  })
+})
+
+describe('bar height reservation', () => {
+  let glue: Glue
+  beforeEach(async () => { glue = await loadGlue() })
+
+  // The real assertion — that no story text ever ends up underneath the bar — needs layout, so it
+  // lives in the end-to-end suite. jsdom reports every box as zero-sized, so what matters here is
+  // that measuring degrades quietly instead of writing a nonsense reservation.
+  it('does nothing and does not throw when there is no bar', () => {
+    expect(() => glue.measureBar()).not.toThrow()
+    expect(glue.measureBar()).toBe(0)
+    expect(document.documentElement.style.getPropertyValue('--ifb-bar-height')).toBe('')
+  })
+
+  it('does not write a zero reservation when the engine reports no layout', () => {
+    // A 0px reservation would be worse than the stylesheet fallback: the bar would cover the text.
+    glue.buildBar()
+    expect(glue.measureBar()).toBe(0)
+    expect(document.documentElement.style.getPropertyValue('--ifb-bar-height')).toBe('')
+  })
+
+  it('reserves the measured height when the engine does report layout', () => {
+    glue.buildBar()
+    const bar = document.getElementById('ifb-bar')
+    if (!bar) { throw new Error('test setup: no bar') }
+    bar.getBoundingClientRect = () => ({ height: 231, width: 800, top: 0, left: 0, right: 800,
+      bottom: 231, x: 0, y: 0, toJSON: () => ({}) })
+    expect(glue.measureBar()).toBe(231)
+    expect(document.documentElement.style.getPropertyValue('--ifb-bar-height')).toBe('231px')
+  })
+
+  it('keeps a reader pinned to the newest line when the reservation grows', () => {
+    const bw = makeBuffer(['x'], { withInput: true })
+    glue.buildBar()
+    const bar = document.getElementById('ifb-bar')
+    if (!bar) { throw new Error('test setup: no bar') }
+    // jsdom does no layout, so stand in for a buffer scrolled to its end.
+    Object.defineProperty(bw, 'scrollHeight', { value: 1000, configurable: true })
+    Object.defineProperty(bw, 'clientHeight', { value: 400, configurable: true })
+    bw.scrollTop = 600
+    bar.getBoundingClientRect = () => ({ height: 300, width: 800, top: 0, left: 0, right: 800,
+      bottom: 300, x: 0, y: 0, toJSON: () => ({}) })
+    glue.measureBar()
+    expect(bw.scrollTop).toBe(1000)
+  })
+
+  it('leaves the scroll position alone when the reader has scrolled back', () => {
+    const bw = makeBuffer(['x'], { withInput: true })
+    glue.buildBar()
+    const bar = document.getElementById('ifb-bar')
+    if (!bar) { throw new Error('test setup: no bar') }
+    Object.defineProperty(bw, 'scrollHeight', { value: 1000, configurable: true })
+    Object.defineProperty(bw, 'clientHeight', { value: 400, configurable: true })
+    bw.scrollTop = 100                       // reading back through earlier output
+    bar.getBoundingClientRect = () => ({ height: 300, width: 800, top: 0, left: 0, right: 800,
+      bottom: 300, x: 0, y: 0, toJSON: () => ({}) })
+    glue.measureBar()
+    expect(bw.scrollTop).toBe(100)
+  })
+})
+
 describe('host independence', () => {
   let glue: Glue
   beforeEach(async () => { glue = await loadGlue() })

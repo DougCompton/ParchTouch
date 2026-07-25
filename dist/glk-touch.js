@@ -153,6 +153,8 @@
   var MAP_SELECTORS = "#map, #map-container, .map-container, [data-if-map]";
   var state = createState();
   var bootTimer = null;
+  var barSizeObserver = null;
+  var barResizeBound = false;
   function bufferWindow() {
     return document.querySelector(".BufferWindow");
   }
@@ -242,6 +244,27 @@
     el.focus();
     el.value = cmd;
     el.dispatchEvent(new Event("input", { bubbles: true }));
+    fireKey(el, "Enter", 13);
+    return true;
+  }
+  function pressEnter() {
+    const mode = inputMode();
+    if (mode === "more") {
+      dismissMorePrompt();
+      return false;
+    }
+    if (mode === "char") {
+      const bw = bufferWindow();
+      if (bw) {
+        fireKey(bw, "Enter", 13);
+      }
+      return false;
+    }
+    const el = findLineInput();
+    if (!el) {
+      return false;
+    }
+    el.focus();
     fireKey(el, "Enter", 13);
     return true;
   }
@@ -417,7 +440,7 @@
       const label = v.charAt(0).toUpperCase() + v.slice(1);
       host.appendChild(button(label, "ifb-verb", (btn) => apply(tapVerb(state, v), btn)));
     }
-    host.appendChild(button("\u2699", "ifb-editverbs", () => toggleEditor(), "Edit verb buttons"));
+    measureBar();
   }
   function renderEditor() {
     const panel = document.getElementById("ifb-editor");
@@ -450,6 +473,7 @@
       list.appendChild(chip);
     }
     panel.appendChild(list);
+    measureBar();
   }
   function toggleEditor() {
     const panel = document.getElementById("ifb-editor");
@@ -460,6 +484,7 @@
     if (panel.classList.contains("ifb-open")) {
       renderEditor();
     }
+    measureBar();
   }
   function buildBar() {
     const existing = document.getElementById("ifb-bar");
@@ -468,15 +493,26 @@
     }
     const bar = document.createElement("div");
     bar.id = "ifb-bar";
+    const row = document.createElement("div");
+    row.className = "ifb-row";
     const moves = document.createElement("div");
     moves.className = "ifb-group ifb-moves";
     for (const [label, cmd] of MOVES) {
       moves.appendChild(button(label, "ifb-move", () => apply(tapDirect(state, cmd), null)));
     }
-    bar.appendChild(moves);
+    moves.appendChild(button(
+      "\u21B5",
+      "ifb-enter",
+      () => {
+        pressEnter();
+      },
+      "Press Enter \u2014 submit the input as it stands, or advance a prompt"
+    ));
+    moves.appendChild(button("\u2699", "ifb-editverbs", () => toggleEditor(), "Edit verb buttons"));
+    row.appendChild(moves);
     const verbs = document.createElement("div");
     verbs.className = "ifb-group ifb-verbs";
-    bar.appendChild(verbs);
+    row.appendChild(verbs);
     const cmds = document.createElement("div");
     cmds.className = "ifb-group ifb-cmds";
     for (const [label, cmd] of NOARG) {
@@ -486,13 +522,53 @@
       state = clearPending(state);
       renderArmed(null);
     }, "Cancel the armed verb or noun"));
-    bar.appendChild(cmds);
+    row.appendChild(cmds);
+    bar.appendChild(row);
     const editor = document.createElement("div");
     editor.id = "ifb-editor";
     bar.appendChild(editor);
     document.body.appendChild(bar);
     renderVerbs();
+    watchBarSize(bar);
     return bar;
+  }
+  function measureBar() {
+    const bar = document.getElementById("ifb-bar");
+    if (!bar) {
+      return 0;
+    }
+    const height = Math.ceil(bar.getBoundingClientRect().height);
+    if (height <= 0) {
+      return 0;
+    }
+    const root = document.documentElement;
+    const next = height + "px";
+    if (root.style.getPropertyValue("--ifb-bar-height") === next) {
+      return height;
+    }
+    const bw = bufferWindow();
+    const wasAtEnd = bw !== null && bw.scrollHeight - bw.scrollTop - bw.clientHeight < 4;
+    root.style.setProperty("--ifb-bar-height", next);
+    if (bw && wasAtEnd) {
+      bw.scrollTop = bw.scrollHeight;
+    }
+    return height;
+  }
+  function watchBarSize(bar) {
+    measureBar();
+    if (typeof ResizeObserver === "function") {
+      barSizeObserver == null ? void 0 : barSizeObserver.disconnect();
+      barSizeObserver = new ResizeObserver(() => {
+        measureBar();
+      });
+      barSizeObserver.observe(bar);
+    }
+    if (!barResizeBound) {
+      barResizeBound = true;
+      window.addEventListener("resize", () => {
+        measureBar();
+      });
+    }
   }
   function adoptHostFeatures() {
     const mapPane = document.querySelector(MAP_SELECTORS);
@@ -511,6 +587,7 @@
     }, "Show or hide the map");
     toggle.setAttribute("aria-pressed", "false");
     cmds.appendChild(toggle);
+    measureBar();
   }
   function boot(triesLeft) {
     if (watchBuffer()) {
@@ -536,11 +613,13 @@
     findLineInput,
     inputMode,
     submitCommand,
+    pressEnter,
     dismissMorePrompt,
     decorateBuffer,
     watchBuffer,
     buildBar,
     adoptHostFeatures,
+    measureBar,
     loadVerbs,
     saveVerbs,
     resetVerbs,

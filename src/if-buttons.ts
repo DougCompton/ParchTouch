@@ -50,11 +50,13 @@ export interface DebugHandle {
   findLineInput: typeof findLineInput
   inputMode: typeof inputMode
   submitCommand: typeof submitCommand
+  pressEnter: typeof pressEnter
   dismissMorePrompt: typeof dismissMorePrompt
   decorateBuffer: typeof decorateBuffer
   watchBuffer: typeof watchBuffer
   buildBar: typeof buildBar
   adoptHostFeatures: typeof adoptHostFeatures
+  measureBar: typeof measureBar
   loadVerbs: typeof loadVerbs
   saveVerbs: typeof saveVerbs
   resetVerbs: typeof resetVerbs
@@ -95,6 +97,8 @@ const MAP_SELECTORS = '#map, #map-container, .map-container, [data-if-map]'
 
 let state: CommandState = createState()
 let bootTimer: ReturnType<typeof setTimeout> | null = null
+let barSizeObserver: ResizeObserver | null = null
+let barResizeBound = false
 
 // ── GlkOte inspection ────────────────────────────────────────────────────────────────────────
 function bufferWindow(): HTMLElement | null {
@@ -218,6 +222,35 @@ export function submitCommand(command: string | null | undefined): boolean {
   // event can trip a host's autocomplete for no benefit.
   el.value = cmd
   el.dispatchEvent(new Event('input', { bubbles: true }))
+  fireKey(el, 'Enter', 13)
+  return true
+}
+
+/**
+ * Press Return on the host's input exactly as it stands — the centre button of the movement pad.
+ *
+ * Deliberately does NOT write a value. It submits whatever is already in the field, so it covers the
+ * cases a command button cannot: a partially typed line, a "press any key" char prompt, and a pager.
+ * Those last two are the states where a tap otherwise appears to do nothing.
+ *
+ * Leaves any armed verb or noun alone: this is a keyboard passthrough, not a command being built.
+ * Returns true only when a Return actually reached a line input.
+ */
+export function pressEnter(): boolean {
+  const mode = inputMode()
+  if (mode === 'more') {
+    dismissMorePrompt()
+    return false
+  }
+  if (mode === 'char') {
+    // A char prompt accepts any key, and Enter is the one this button represents.
+    const bw = bufferWindow()
+    if (bw) { fireKey(bw, 'Enter', 13) }
+    return false
+  }
+  const el = findLineInput()
+  if (!el) { return false }
+  el.focus()
   fireKey(el, 'Enter', 13)
   return true
 }
@@ -418,7 +451,7 @@ export function renderVerbs(): void {
     const label = v.charAt(0).toUpperCase() + v.slice(1)
     host.appendChild(button(label, 'ifb-verb', btn => apply(tapVerb(state, v), btn)))
   }
-  host.appendChild(button('⚙', 'ifb-editverbs', () => toggleEditor(), 'Edit verb buttons'))
+  measureBar()          // a different number of verbs is a different bar height
 }
 
 function renderEditor(): void {
@@ -454,6 +487,7 @@ function renderEditor(): void {
     list.appendChild(chip)
   }
   panel.appendChild(list)
+  measureBar()
 }
 
 function toggleEditor(): void {
@@ -461,6 +495,7 @@ function toggleEditor(): void {
   if (!panel) { return }
   panel.classList.toggle('ifb-open')
   if (panel.classList.contains('ifb-open')) { renderEditor() }
+  measureBar()
 }
 
 export function buildBar(): HTMLElement {
@@ -470,16 +505,43 @@ export function buildBar(): HTMLElement {
   const bar = document.createElement('div')
   bar.id = 'ifb-bar'
 
+  /*
+   * One row holding the pad and everything else, with the verb editor as a separate full-width panel
+   * beneath it. Without this wrapper the bar was a single wrapping flex line, so the verb and command
+   * groups dropped BELOW the pad once they ran out of width instead of staying to its right.
+   */
+  const row = document.createElement('div')
+  row.className = 'ifb-row'
+
+  /*
+   * The movement pad, a 4x3 grid laid out by the stylesheet:
+   *
+   *     NW   N   NE   Up
+   *     W    ↵    E    Down
+   *     SW   S   SE   (gear)
+   *
+   * ↵ and the gear are NOT .ifb-move — only the ten directions carry that class, so anything
+   * asking "what are the movement buttons?" still gets exactly the compass. DOM order is the ten
+   * directions, then ↵, then the gear; the stylesheet places them, so reading order and tab order
+   * differ slightly in the middle row. Acceptable for a touch pad, and the alternative is fragile
+   * sibling-index CSS.
+   */
   const moves = document.createElement('div')
   moves.className = 'ifb-group ifb-moves'
   for (const [label, cmd] of MOVES) {
     moves.appendChild(button(label, 'ifb-move', () => apply(tapDirect(state, cmd), null)))
   }
-  bar.appendChild(moves)
+  // Labelled with the return glyph, not the word "Enter": `enter` is also one of the default VERBS
+  // (go in / board), and two adjacent buttons reading "Enter" with different behaviour is a trap.
+  // Icon-only, so the accessible name carries the meaning — as with ✕, ⚙ and ⊞.
+  moves.appendChild(button('↵', 'ifb-enter', () => { pressEnter() },
+    'Press Enter — submit the input as it stands, or advance a prompt'))
+  moves.appendChild(button('⚙', 'ifb-editverbs', () => toggleEditor(), 'Edit verb buttons'))
+  row.appendChild(moves)
 
   const verbs = document.createElement('div')
   verbs.className = 'ifb-group ifb-verbs'
-  bar.appendChild(verbs)
+  row.appendChild(verbs)
 
   const cmds = document.createElement('div')
   cmds.className = 'ifb-group ifb-cmds'
@@ -490,7 +552,9 @@ export function buildBar(): HTMLElement {
     state = clearPending(state)
     renderArmed(null)
   }, 'Cancel the armed verb or noun'))
-  bar.appendChild(cmds)
+  row.appendChild(cmds)
+
+  bar.appendChild(row)
 
   const editor = document.createElement('div')
   editor.id = 'ifb-editor'
@@ -498,7 +562,61 @@ export function buildBar(): HTMLElement {
 
   document.body.appendChild(bar)
   renderVerbs()
+  watchBarSize(bar)
   return bar
+}
+
+/**
+ * Reserve exactly as much room for the bar as it actually occupies.
+ *
+ * WHY THIS IS NOT A FIXED NUMBER. The bar is a fixed overlay, so the story text has to be padded out
+ * from underneath it. The stylesheet's original 190px guess was wrong: a full bar measures 369px on a
+ * portrait tablet, which left 173px of output — including the live input line — permanently hidden
+ * beneath the overlay AND unreachable, because the buffer was already scrolled to its end. Measuring
+ * removes the guess, and keeps working when the verb list changes, the editor opens, a map host
+ * shrinks the targets, or the device rotates.
+ *
+ * The stylesheet caps the bar at three button rows and scrolls beyond that, so what is reserved can
+ * never run away either.
+ *
+ * Returns the height applied, or 0 when there is no bar or no layout to measure (jsdom reports every
+ * box as zero-sized, so this degrades to doing nothing there).
+ */
+export function measureBar(): number {
+  const bar = document.getElementById('ifb-bar')
+  if (!bar) { return 0 }
+  const height = Math.ceil(bar.getBoundingClientRect().height)
+  if (height <= 0) { return 0 }
+
+  const root = document.documentElement
+  const next = height + 'px'
+  if (root.style.getPropertyValue('--ifb-bar-height') === next) { return height }
+
+  // Growing the padding lengthens the scrollable area, which would otherwise strand a reader who was
+  // looking at the newest line. Keep them pinned to the end if that is where they already were.
+  const bw = bufferWindow()
+  const wasAtEnd = bw !== null && bw.scrollHeight - bw.scrollTop - bw.clientHeight < 4
+  root.style.setProperty('--ifb-bar-height', next)
+  if (bw && wasAtEnd) { bw.scrollTop = bw.scrollHeight }
+  return height
+}
+
+/**
+ * Keep the reservation in step with the bar. ResizeObserver is the accurate signal but postdates the
+ * advertised floor (it needs Safari 13.1 where the addon claims 11.1), so it is feature-detected and a
+ * window resize listener plus the explicit calls from the render paths cover the rest.
+ */
+function watchBarSize(bar: HTMLElement): void {
+  measureBar()
+  if (typeof ResizeObserver === 'function') {
+    barSizeObserver?.disconnect()
+    barSizeObserver = new ResizeObserver(() => { measureBar() })
+    barSizeObserver.observe(bar)
+  }
+  if (!barResizeBound) {
+    barResizeBound = true
+    window.addEventListener('resize', () => { measureBar() })
+  }
 }
 
 /**
@@ -518,6 +636,7 @@ export function adoptHostFeatures(): void {
   }, 'Show or hide the map')
   toggle.setAttribute('aria-pressed', 'false')   // a toggle must expose its state before first use
   cmds.appendChild(toggle)
+  measureBar()          // .ifb-host-map shrinks the targets, so the bar is a different height now
 }
 
 // ── boot ─────────────────────────────────────────────────────────────────────────────────────
@@ -548,9 +667,9 @@ export function currentState(): CommandState { return state }
 // Console debugging handle ONLY (the troubleshooting docs use `IFButtons.inputMode()`). Never the
 // interface between our own modules — those use ESM imports.
 window.IFButtons = {
-  findLineInput, inputMode, submitCommand, dismissMorePrompt, decorateBuffer, watchBuffer,
-  buildBar, adoptHostFeatures, loadVerbs, saveVerbs, resetVerbs, addVerbFromUI, removeVerbFromUI,
-  renderVerbs, boot, stopBoot, currentState,
+  findLineInput, inputMode, submitCommand, pressEnter, dismissMorePrompt, decorateBuffer, watchBuffer,
+  buildBar, adoptHostFeatures, measureBar, loadVerbs, saveVerbs, resetVerbs, addVerbFromUI,
+  removeVerbFromUI, renderVerbs, boot, stopBoot, currentState,
 }
 
 if (document.readyState !== 'loading') {
