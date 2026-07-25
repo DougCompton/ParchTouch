@@ -1,0 +1,24 @@
+{
+  "name": "glk-touch",
+  "version": "0.1.0",
+  "description": "On-screen command buttons for GlkOte-based interactive fiction players — play parser IF by touch, no keyboard.",
+  "license": "MIT",
+  "author": "Doug Compton",
+  "type": "module",
+  "files": ["dist", "src", "LICENSE", "README.md", "docs"],
+  "scripts": {
+    "typecheck": "tsc --noEmit",
+    "test": "vitest run",
+    "test:watch": "vitest",
+    "build": "sh scripts/build.sh",
+    "dev": "esbuild src/if-buttons.ts --bundle --format=iife --target=es2018 --sourcemap --outfile=dist/glk-touch.js --watch",
+    "lint:independence": "sh scripts/check-independence.sh",
+    "ci": "sh scripts/ci.sh"
+  },
+  "devDependencies": {
+    "esbuild": "^0.24.0",
+    "jsdom": "^25.0.1",
+    "typescript": "^5.6.0",
+    "vitest": "^2.1.8"
+  }
+}

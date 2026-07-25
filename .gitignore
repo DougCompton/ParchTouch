@@ -1,0 +1,9 @@
+node_modules/
+.DS_Store
+harness/vendor/
+harness/stories/*
+!harness/stories/.gitkeep
+# dev-only by-product of `npm run dev --sourcemap`; the released bundle has no map
+dist/*.map
+# execute-plan pipeline handoff artifacts (process, not product)
+.claude/
