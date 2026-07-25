@@ -4,10 +4,18 @@
  * SPDX-License-Identifier: MIT
  * Copyright (c) 2026 Doug Compton
  *
- * WHY: parser IF needs typed commands, which is painful on a tablet. This adds an on-screen bar
- * (compass + no-argument commands + editable verbs) and makes every word in the story text tappable,
- * so a session needs no keyboard: tap a VERB then the object's WORD (either order) and the command is
- * sent as if typed.
+ * WHY: parser IF needs typed commands, which is painful on a tablet. This adds an on-screen bar and
+ * makes every word in the story text tappable, so a session needs no keyboard.
+ *
+ * THE INTERACTION MODEL, left to right across the bar:
+ *   .ifb-moves    the direction pad. Directions SEND immediately — movement is wanted every turn and
+ *                 is unambiguous, so confirming it would double the taps for the commonest action. Its
+ *                 centre is ↵ (send what is staged) and its corner the settings gear.
+ *   .ifb-verbs    one editable list holding every other word, from `look` to `take`. A tap STAGES text
+ *                 into the host's input and sends nothing; the player reviews it and presses ↵. Verb
+ *                 and noun pair in either order — tap Examine then a word, or a word then Examine.
+ *   .ifb-actions  ✕ (abandon the composition) and, when a map host is detected, the map toggle. The
+ *                 only non-movement controls that act on the spot, because neither sends a command.
  *
  * HOW IT INTEGRATES — no fork of any host, no patched engine. It relies only on GlkOte's documented
  * DOM contract:
@@ -50,6 +58,8 @@ export interface DebugHandle {
   findLineInput: typeof findLineInput
   inputMode: typeof inputMode
   submitCommand: typeof submitCommand
+  stageCommand: typeof stageCommand
+  cancelPending: typeof cancelPending
   pressEnter: typeof pressEnter
   dismissMorePrompt: typeof dismissMorePrompt
   decorateBuffer: typeof decorateBuffer
@@ -63,6 +73,10 @@ export interface DebugHandle {
   addVerbFromUI: typeof addVerbFromUI
   removeVerbFromUI: typeof removeVerbFromUI
   renderVerbs: typeof renderVerbs
+  openEditor: typeof openEditor
+  closeEditor: typeof closeEditor
+  toggleEditor: typeof toggleEditor
+  isEditorOpen: typeof isEditorOpen
   boot: typeof boot
   stopBoot: typeof stopBoot
   currentState: typeof currentState
@@ -86,10 +100,6 @@ const MOVES: ReadonlyArray<readonly [string, string]> = [
   ['W', 'west'], ['E', 'east'],
   ['SW', 'southwest'], ['S', 'south'], ['SE', 'southeast'],
   ['Up', 'up'], ['Down', 'down'],
-]
-const NOARG: ReadonlyArray<readonly [string, string]> = [
-  ['Look', 'look'], ['Inv', 'inventory'], ['Wait', 'wait'], ['In', 'in'], ['Out', 'out'],
-  ['Again', 'again'], ['Undo', 'undo'], ['Save', 'save'], ['Restore', 'restore'],
 ]
 // Candidate selectors for an OPTIONAL map panel. Deliberately generic — this is capability
 // detection, not host detection; narrow it only when a real host is verified (Task 6.5).
@@ -255,10 +265,55 @@ export function pressEnter(): boolean {
   return true
 }
 
-function apply(res: TapResult, armEl: HTMLElement | null): void {
+/**
+ * Write text into the host's input WITHOUT sending it, so the player can review it and press ↵.
+ *
+ * Assigns rather than appends, for the same reason submitCommand() does: the composed text already
+ * contains the whole command, and a host may have left residue in the field.
+ */
+export function stageCommand(text: string): boolean {
+  const el = findLineInput()
+  if (!el) { return false }
+  el.value = text
+  el.dispatchEvent(new Event('input', { bubbles: true }))
+  return true
+}
+
+/** Clear the composition: nothing armed, nothing staged in the field. */
+export function cancelPending(): void {
+  state = clearPending(state)
+  renderArmed(null)
+  stageCommand('')
+}
+
+/**
+ * How a tap reaches the game.
+ *
+ *  'send'  — deliver immediately. Movement only: a direction is unambiguous and wanted every turn, so
+ *            making the player confirm it would double the taps for the commonest action.
+ *  'stage' — write the composition into the input and stop. Everything in the verb strip works this
+ *            way, so a mis-tap costs nothing and the player sees exactly what will be sent before
+ *            pressing ↵.
+ */
+type Delivery = 'send' | 'stage'
+
+function apply(res: TapResult, armEl: HTMLElement | null, delivery: Delivery): void {
   state = res.state
   renderArmed(armEl)
-  if (res.command) { submitCommand(res.command) }
+
+  if (delivery === 'send') {
+    if (res.command) { submitCommand(res.command) }
+    return
+  }
+
+  /*
+   * Show whatever the composition currently amounts to: the finished command once a pair completes, or
+   * the half of it that is armed so far. Reading it out of the model rather than appending to the field
+   * is what preserves either-order pairing — tapping "lamp" then Examine still stages "examine lamp"
+   * and not "lamp examine".
+   */
+  const composed = res.command ?? state.pendingVerb ?? state.pendingNoun
+  if (composed !== null) { stageCommand(composed) }
 }
 
 function renderArmed(armEl: HTMLElement | null): void {
@@ -353,7 +408,7 @@ function ensureWordClicks(near?: Element | null): void {
     // One tokenizer-produced word only: normalizeWord tolerates inner spaces, so a multi-word
     // string here could smuggle an Inform command separator into the line.
     if (t instanceof HTMLElement && t.classList.contains('ifb-word')) {
-      apply(tapWord(state, t.textContent), t)
+      apply(tapWord(state, t.textContent), t, 'stage')
     }
   })
 }
@@ -449,7 +504,7 @@ export function renderVerbs(): void {
   while (host.firstChild) { host.removeChild(host.firstChild) }
   for (const v of loadVerbs()) {
     const label = v.charAt(0).toUpperCase() + v.slice(1)
-    host.appendChild(button(label, 'ifb-verb', btn => apply(tapVerb(state, v), btn)))
+    host.appendChild(button(label, 'ifb-verb', btn => apply(tapVerb(state, v), btn, 'stage')))
   }
   measureBar()          // a different number of verbs is a different bar height
 }
@@ -464,6 +519,9 @@ function renderEditor(): void {
 
   const row = document.createElement('div')
   row.className = 'ifb-editrow'
+  // Close comes FIRST: while the editor is open it replaces the whole control row, so this is the
+  // only way back to the buttons — including back to the ⚙ that opened it.
+  row.appendChild(button('✕ Close', 'ifb-closeeditor', () => { closeEditor() }, 'Close settings'))
   const input = document.createElement('input')
   input.type = 'text'
   input.className = 'ifb-newverb'
@@ -490,12 +548,35 @@ function renderEditor(): void {
   measureBar()
 }
 
-function toggleEditor(): void {
-  const panel = document.getElementById('ifb-editor')
-  if (!panel) { return }
-  panel.classList.toggle('ifb-open')
-  if (panel.classList.contains('ifb-open')) { renderEditor() }
+/*
+ * The editor takes the place of the buttons rather than sitting alongside them.
+ *
+ * WHY: the bar is capped at three button rows, so a panel stacked underneath would either blow that
+ * budget or be squeezed to nothing. Swapping the control row out gives the editor the whole bar, and
+ * the player gets the buttons back with its Close button. The state lives as a class on #ifb-bar so a
+ * single CSS rule swaps the two, with no inline styles to unpick.
+ */
+export function openEditor(): void {
+  const bar = document.getElementById('ifb-bar')
+  if (!bar) { return }
+  renderEditor()                 // build the contents BEFORE showing, so nothing flashes empty
+  bar.classList.add('ifb-editing')
   measureBar()
+}
+
+export function closeEditor(): void {
+  const bar = document.getElementById('ifb-bar')
+  if (!bar) { return }
+  bar.classList.remove('ifb-editing')
+  measureBar()
+}
+
+export function isEditorOpen(): boolean {
+  return document.getElementById('ifb-bar')?.classList.contains('ifb-editing') ?? false
+}
+
+export function toggleEditor(): void {
+  if (isEditorOpen()) { closeEditor() } else { openEditor() }
 }
 
 export function buildBar(): HTMLElement {
@@ -529,30 +610,32 @@ export function buildBar(): HTMLElement {
   const moves = document.createElement('div')
   moves.className = 'ifb-group ifb-moves'
   for (const [label, cmd] of MOVES) {
-    moves.appendChild(button(label, 'ifb-move', () => apply(tapDirect(state, cmd), null)))
+    moves.appendChild(button(label, 'ifb-move', () => apply(tapDirect(state, cmd), null, 'send')))
   }
   // Labelled with the return glyph, not the word "Enter": `enter` is also one of the default VERBS
   // (go in / board), and two adjacent buttons reading "Enter" with different behaviour is a trap.
   // Icon-only, so the accessible name carries the meaning — as with ✕, ⚙ and ⊞.
   moves.appendChild(button('↵', 'ifb-enter', () => { pressEnter() },
     'Press Enter — submit the input as it stands, or advance a prompt'))
-  moves.appendChild(button('⚙', 'ifb-editverbs', () => toggleEditor(), 'Edit verb buttons'))
+  moves.appendChild(button('⚙', 'ifb-editverbs', () => { toggleEditor() }, 'Settings — edit the word list'))
   row.appendChild(moves)
 
   const verbs = document.createElement('div')
   verbs.className = 'ifb-group ifb-verbs'
   row.appendChild(verbs)
 
-  const cmds = document.createElement('div')
-  cmds.className = 'ifb-group ifb-cmds'
-  for (const [label, cmd] of NOARG) {
-    cmds.appendChild(button(label, 'ifb-cmd', () => apply(tapDirect(state, cmd), null)))
-  }
-  cmds.appendChild(button('✕', 'ifb-cancel', () => {
-    state = clearPending(state)
-    renderArmed(null)
-  }, 'Cancel the armed verb or noun'))
-  row.appendChild(cmds)
+  /*
+   * The two immediate actions, stacked vertically at the right-hand end. They are the only controls
+   * outside the pad that act on the spot rather than staging text: ✕ abandons the composition, and the
+   * map toggle is a view control that never touches the game. Everything else that used to live here —
+   * look, inventory, again, undo, save, restore and the rest — is now an ordinary entry in the verb
+   * list, staged like any other word and sent with ↵.
+   */
+  const actions = document.createElement('div')
+  actions.className = 'ifb-group ifb-actions'
+  actions.appendChild(button('✕', 'ifb-cancel', () => { cancelPending() },
+    'Clear the command being built'))
+  row.appendChild(actions)
 
   bar.appendChild(row)
 
@@ -627,15 +710,15 @@ export function adoptHostFeatures(): void {
   const mapPane = document.querySelector<HTMLElement>(MAP_SELECTORS)
   if (!mapPane) { return }
   document.documentElement.classList.add('ifb-host-map')
-  const cmds = document.querySelector<HTMLElement>('#ifb-bar .ifb-cmds')
-  if (!cmds || cmds.querySelector('.ifb-maptoggle')) { return }
+  const actions = document.querySelector<HTMLElement>('#ifb-bar .ifb-actions')
+  if (!actions || actions.querySelector('.ifb-maptoggle')) { return }
   const toggle = button('⊞', 'ifb-maptoggle', btn => {
     const collapsed = document.documentElement.classList.toggle('ifb-map-collapsed')
     mapPane.style.display = collapsed ? 'none' : ''
     btn.setAttribute('aria-pressed', String(collapsed))
   }, 'Show or hide the map')
   toggle.setAttribute('aria-pressed', 'false')   // a toggle must expose its state before first use
-  cmds.appendChild(toggle)
+  actions.appendChild(toggle)
   measureBar()          // .ifb-host-map shrinks the targets, so the bar is a different height now
 }
 
@@ -667,9 +750,11 @@ export function currentState(): CommandState { return state }
 // Console debugging handle ONLY (the troubleshooting docs use `IFButtons.inputMode()`). Never the
 // interface between our own modules — those use ESM imports.
 window.IFButtons = {
-  findLineInput, inputMode, submitCommand, pressEnter, dismissMorePrompt, decorateBuffer, watchBuffer,
+  findLineInput, inputMode, submitCommand, stageCommand, cancelPending, pressEnter,
+  dismissMorePrompt, decorateBuffer, watchBuffer,
   buildBar, adoptHostFeatures, measureBar, loadVerbs, saveVerbs, resetVerbs, addVerbFromUI,
-  removeVerbFromUI, renderVerbs, boot, stopBoot, currentState,
+  removeVerbFromUI, renderVerbs, openEditor, closeEditor, toggleEditor, isEditorOpen,
+  boot, stopBoot, currentState,
 }
 
 if (document.readyState !== 'loading') {

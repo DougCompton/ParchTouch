@@ -7,11 +7,15 @@
   // src/command-model.ts
   var MAX_COMMAND_LENGTH = 120;
   var DEFAULT_VERBS = [
+    "look",
+    "inventory",
     "examine",
     "take",
     "drop",
     "open",
     "close",
+    "in",
+    "out",
     "read",
     "search",
     "push",
@@ -20,7 +24,12 @@
     "turn off",
     "unlock",
     "wear",
-    "enter"
+    "enter",
+    "wait",
+    "again",
+    "undo",
+    "save",
+    "restore"
   ];
   var MAX_VERBS = 40;
   var MAX_VERB_LENGTH = 30;
@@ -138,17 +147,6 @@
     ["SE", "southeast"],
     ["Up", "up"],
     ["Down", "down"]
-  ];
-  var NOARG = [
-    ["Look", "look"],
-    ["Inv", "inventory"],
-    ["Wait", "wait"],
-    ["In", "in"],
-    ["Out", "out"],
-    ["Again", "again"],
-    ["Undo", "undo"],
-    ["Save", "save"],
-    ["Restore", "restore"]
   ];
   var MAP_SELECTORS = "#map, #map-container, .map-container, [data-if-map]";
   var state = createState();
@@ -268,11 +266,33 @@
     fireKey(el, "Enter", 13);
     return true;
   }
-  function apply(res, armEl) {
+  function stageCommand(text) {
+    const el = findLineInput();
+    if (!el) {
+      return false;
+    }
+    el.value = text;
+    el.dispatchEvent(new Event("input", { bubbles: true }));
+    return true;
+  }
+  function cancelPending() {
+    state = clearPending(state);
+    renderArmed(null);
+    stageCommand("");
+  }
+  function apply(res, armEl, delivery) {
+    var _a, _b;
     state = res.state;
     renderArmed(armEl);
-    if (res.command) {
-      submitCommand(res.command);
+    if (delivery === "send") {
+      if (res.command) {
+        submitCommand(res.command);
+      }
+      return;
+    }
+    const composed = (_b = (_a = res.command) != null ? _a : state.pendingVerb) != null ? _b : state.pendingNoun;
+    if (composed !== null) {
+      stageCommand(composed);
     }
   }
   function renderArmed(armEl) {
@@ -349,7 +369,7 @@
     bw.addEventListener("click", (e) => {
       const t = e.target;
       if (t instanceof HTMLElement && t.classList.contains("ifb-word")) {
-        apply(tapWord(state, t.textContent), t);
+        apply(tapWord(state, t.textContent), t, "stage");
       }
     });
   }
@@ -438,7 +458,7 @@
     }
     for (const v of loadVerbs()) {
       const label = v.charAt(0).toUpperCase() + v.slice(1);
-      host.appendChild(button(label, "ifb-verb", (btn) => apply(tapVerb(state, v), btn)));
+      host.appendChild(button(label, "ifb-verb", (btn) => apply(tapVerb(state, v), btn, "stage")));
     }
     measureBar();
   }
@@ -452,6 +472,9 @@
     }
     const row = document.createElement("div");
     row.className = "ifb-editrow";
+    row.appendChild(button("\u2715 Close", "ifb-closeeditor", () => {
+      closeEditor();
+    }, "Close settings"));
     const input = document.createElement("input");
     input.type = "text";
     input.className = "ifb-newverb";
@@ -475,16 +498,33 @@
     panel.appendChild(list);
     measureBar();
   }
-  function toggleEditor() {
-    const panel = document.getElementById("ifb-editor");
-    if (!panel) {
+  function openEditor() {
+    const bar = document.getElementById("ifb-bar");
+    if (!bar) {
       return;
     }
-    panel.classList.toggle("ifb-open");
-    if (panel.classList.contains("ifb-open")) {
-      renderEditor();
-    }
+    renderEditor();
+    bar.classList.add("ifb-editing");
     measureBar();
+  }
+  function closeEditor() {
+    const bar = document.getElementById("ifb-bar");
+    if (!bar) {
+      return;
+    }
+    bar.classList.remove("ifb-editing");
+    measureBar();
+  }
+  function isEditorOpen() {
+    var _a, _b;
+    return (_b = (_a = document.getElementById("ifb-bar")) == null ? void 0 : _a.classList.contains("ifb-editing")) != null ? _b : false;
+  }
+  function toggleEditor() {
+    if (isEditorOpen()) {
+      closeEditor();
+    } else {
+      openEditor();
+    }
   }
   function buildBar() {
     const existing = document.getElementById("ifb-bar");
@@ -498,7 +538,7 @@
     const moves = document.createElement("div");
     moves.className = "ifb-group ifb-moves";
     for (const [label, cmd] of MOVES) {
-      moves.appendChild(button(label, "ifb-move", () => apply(tapDirect(state, cmd), null)));
+      moves.appendChild(button(label, "ifb-move", () => apply(tapDirect(state, cmd), null, "send")));
     }
     moves.appendChild(button(
       "\u21B5",
@@ -508,21 +548,24 @@
       },
       "Press Enter \u2014 submit the input as it stands, or advance a prompt"
     ));
-    moves.appendChild(button("\u2699", "ifb-editverbs", () => toggleEditor(), "Edit verb buttons"));
+    moves.appendChild(button("\u2699", "ifb-editverbs", () => {
+      toggleEditor();
+    }, "Settings \u2014 edit the word list"));
     row.appendChild(moves);
     const verbs = document.createElement("div");
     verbs.className = "ifb-group ifb-verbs";
     row.appendChild(verbs);
-    const cmds = document.createElement("div");
-    cmds.className = "ifb-group ifb-cmds";
-    for (const [label, cmd] of NOARG) {
-      cmds.appendChild(button(label, "ifb-cmd", () => apply(tapDirect(state, cmd), null)));
-    }
-    cmds.appendChild(button("\u2715", "ifb-cancel", () => {
-      state = clearPending(state);
-      renderArmed(null);
-    }, "Cancel the armed verb or noun"));
-    row.appendChild(cmds);
+    const actions = document.createElement("div");
+    actions.className = "ifb-group ifb-actions";
+    actions.appendChild(button(
+      "\u2715",
+      "ifb-cancel",
+      () => {
+        cancelPending();
+      },
+      "Clear the command being built"
+    ));
+    row.appendChild(actions);
     bar.appendChild(row);
     const editor = document.createElement("div");
     editor.id = "ifb-editor";
@@ -576,8 +619,8 @@
       return;
     }
     document.documentElement.classList.add("ifb-host-map");
-    const cmds = document.querySelector("#ifb-bar .ifb-cmds");
-    if (!cmds || cmds.querySelector(".ifb-maptoggle")) {
+    const actions = document.querySelector("#ifb-bar .ifb-actions");
+    if (!actions || actions.querySelector(".ifb-maptoggle")) {
       return;
     }
     const toggle = button("\u229E", "ifb-maptoggle", (btn) => {
@@ -586,7 +629,7 @@
       btn.setAttribute("aria-pressed", String(collapsed));
     }, "Show or hide the map");
     toggle.setAttribute("aria-pressed", "false");
-    cmds.appendChild(toggle);
+    actions.appendChild(toggle);
     measureBar();
   }
   function boot(triesLeft) {
@@ -613,6 +656,8 @@
     findLineInput,
     inputMode,
     submitCommand,
+    stageCommand,
+    cancelPending,
     pressEnter,
     dismissMorePrompt,
     decorateBuffer,
@@ -626,6 +671,10 @@
     addVerbFromUI,
     removeVerbFromUI,
     renderVerbs,
+    openEditor,
+    closeEditor,
+    toggleEditor,
+    isEditorOpen,
     boot,
     stopBoot,
     currentState

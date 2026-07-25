@@ -116,13 +116,37 @@
  */
 .ifb-row {
   display: flex;
+  /*
+   * flex:0 0 auto is load-bearing. #ifb-bar is a column flex container with a max-height, so a child
+   * at the default flex-shrink:1 gets COMPRESSED to fit instead of overflowing — which clipped the
+   * verb strip's lower rows rather than making them scrollable.
+   */
+  flex: 0 0 auto;
   flex-wrap: nowrap;
   align-items: flex-start;
   justify-content: flex-start;
   gap: 10px;
 }
-#ifb-bar .ifb-verbs,
-#ifb-bar .ifb-cmds { flex: 1 1 auto; min-width: 0; align-content: flex-start; justify-content: flex-start; }
+/* The verb strip takes the space between the pad and the actions, wrapping within the three rows. */
+#ifb-bar .ifb-verbs {
+  flex: 1 1 auto;
+  min-width: 0;
+  align-content: flex-start;
+  justify-content: flex-start;
+}
+
+/*
+ * ✕ and the map toggle: a fixed column at the right-hand end, stacked vertically. flex:0 0 auto keeps
+ * them from being squeezed by a long verb list, so the two controls that abandon a composition or hide
+ * the map are always exactly where the thumb expects them.
+ */
+.ifb-actions {
+  display: flex;
+  flex-direction: column;
+  flex: 0 0 auto;
+  gap: var(--ifb-gap);
+  align-items: stretch;
+}
 
 .ifb {
   min-width: 52px;
@@ -161,9 +185,14 @@
    layout, so only padding is touched. */
 .BufferWindow { padding-bottom: var(--ifb-bar-height) !important; }
 
-/* Verb editor — hidden until ⚙ is tapped, so it costs no space during play. */
-#ifb-editor { display: none; flex: 1 0 100%; padding: 8px 0 0; border-top: 1px solid #3a3a3a; }
-#ifb-editor.ifb-open { display: block; }
+/*
+ * Settings editor. Hidden during play, and when ⚙ opens it it REPLACES the control row rather than
+ * stacking under it — the bar is capped at three button rows, so there is no space to add to. Its own
+ * Close button is the way back.
+ */
+#ifb-editor { display: none; flex: 0 0 auto; padding: 0; }
+#ifb-bar.ifb-editing .ifb-row { display: none; }
+#ifb-bar.ifb-editing #ifb-editor { display: block; }
 .ifb-editrow { display: flex; gap: 6px; flex-wrap: wrap; margin-bottom: 8px; }
 .ifb-newverb {
   flex: 1 1 160px;
@@ -177,6 +206,8 @@
 }
 .ifb-verblist { display: flex; gap: 6px; flex-wrap: wrap; }
 .ifb-verbchip { font-size: 14px; }
+/* Close is the only exit from the editor, so make it read as the primary control. */
+.ifb-closeeditor { font-weight: 600; }
 
 /* A host that provides a map (optional capability): smaller targets so the prose keeps more room, and
    the map can be collapsed for reading. .ifb-host-map is set by if-buttons.ts on detection.

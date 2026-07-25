@@ -40,9 +40,18 @@ export const MAX_COMMAND_LENGTH = 120
 
 // Default verb set. Core verbs cover the large majority of turns; the player can add or remove any
 // of them, because vocabularies differ per game (decision D3).
+/*
+ * One editable list holds BOTH kinds of word, because the UI no longer distinguishes them: every entry
+ * here stages text into the input, and the player presses Return to send it. So a no-argument command
+ * ("look") and a verb that wants a noun ("take") differ only in whether the player taps a word next.
+ *
+ * Ordered most-used first: the strip is capped at three rows and scrolls, so early entries are the ones
+ * always visible without scrolling.
+ */
 export const DEFAULT_VERBS: readonly string[] = [
-  'examine', 'take', 'drop', 'open', 'close', 'read', 'search',
-  'push', 'pull', 'turn on', 'turn off', 'unlock', 'wear', 'enter',
+  'look', 'inventory', 'examine', 'take', 'drop', 'open', 'close', 'in', 'out',
+  'read', 'search', 'push', 'pull', 'turn on', 'turn off', 'unlock', 'wear', 'enter',
+  'wait', 'again', 'undo', 'save', 'restore',
 ]
 export const MAX_VERBS = 40
 export const MAX_VERB_LENGTH = 30

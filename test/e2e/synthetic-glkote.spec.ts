@@ -39,11 +39,15 @@ test('boots and decorates a page containing no other application scripts', async
   expect(words).toContain('café')
 })
 
-test('the bar renders the full compass and the no-argument commands', async ({ page }) => {
+test('the bar renders the compass, one merged verb list, and two actions', async ({ page }) => {
   expect(await page.locator('#ifb-bar .ifb-move').allTextContents())
     .toEqual(['NW', 'N', 'NE', 'W', 'E', 'SW', 'S', 'SE', 'Up', 'Down'])
-  expect(await page.locator('#ifb-bar .ifb-cmd').allTextContents())
-    .toEqual(['Look', 'Inv', 'Wait', 'In', 'Out', 'Again', 'Undo', 'Save', 'Restore'])
+  // The old no-argument commands are ordinary verb-list entries now, staged like anything else.
+  const verbs = (await page.locator('#ifb-bar .ifb-verb').allTextContents()).map(v => v.toLowerCase())
+  for (const w of ['look', 'inventory', 'take', 'examine', 'again', 'undo', 'save', 'restore']) {
+    expect(verbs).toContain(w)
+  }
+  await expect(page.locator('#ifb-bar .ifb-cmds')).toHaveCount(0)
 })
 
 test('a direction tap delivers the command with a real keyCode 13 (U7)', async ({ page }) => {
@@ -66,18 +70,65 @@ test('submits on keypress only — a stray keydown breaks a jQuery-based host', 
   expect(await page.evaluate(() => window.SYN.strayKeydowns())).toEqual([])
 })
 
-test('every no-argument command maps to its full word', async ({ page }) => {
-  for (const [label, cmd] of [['Look', 'look'], ['Inv', 'inventory'], ['Again', 'again']] as const) {
-    await tapControl(page, 'ifb-cmd', label)
-    expect(await page.evaluate(() => window.SYN.submitted().at(-1))).toBe(cmd)
-  }
+test('a verb tap STAGES and sends nothing until the return key', async ({ page }) => {
+  await page.evaluate(() => window.SYN.reset())
+  await tapVerb(page, 'Look')
+  // Staged in the field where the player can see it...
+  expect(await page.inputValue('.Input.LineInput')).toBe('look')
+  // ...and emphatically not sent.
+  expect(await page.evaluate(() => window.SYN.submitted())).toEqual([])
+
+  await page.locator('#ifb-bar .ifb-enter').click()
+  expect(await page.evaluate(() => window.SYN.submitted())).toEqual(['look'])
+})
+
+test('a direction still sends immediately, with no confirmation', async ({ page }) => {
+  await page.evaluate(() => window.SYN.reset())
+  await tapControl(page, 'ifb-move', 'N')
+  expect(await page.evaluate(() => window.SYN.submitted())).toEqual(['north'])
+})
+
+test('a staged command is sent exactly once', async ({ page }) => {
+  await page.evaluate(() => window.SYN.reset())
+  await tapVerb(page, 'Look')
+  await page.locator('#ifb-bar .ifb-enter').click()
+  expect(await page.evaluate(() => window.SYN.submitted())).toEqual(['look'])
+  // The host cleared the field on submit, so a second press must not resend.
+  await page.locator('#ifb-bar .ifb-enter').click()
+  expect(await page.evaluate(() => window.SYN.submitted())).toEqual(['look'])
+})
+
+test('the cancel button clears the staged text too', async ({ page }) => {
+  await page.evaluate(() => window.SYN.reset())
+  await tapVerb(page, 'Take')
+  await tapWord(page, 'mailbox')
+  expect(await page.inputValue('.Input.LineInput')).toBe('take mailbox')
+  await page.locator('#ifb-bar .ifb-cancel').click()
+  expect(await page.inputValue('.Input.LineInput')).toBe('')
+  await expect(page.locator('.ifb-armed')).toHaveCount(0)
+  expect(await page.evaluate(() => window.SYN.submitted())).toEqual([])
+})
+
+test('the actions column is rightmost and stacked vertically', async ({ page }) => {
+  // No map element on this page, so the toggle is absent and only cancel remains.
+  expect(await page.locator('#ifb-bar .ifb-actions .ifb').allTextContents()).toEqual(['\u2715'])
+  const box = await page.evaluate(() => {
+    const lefts = [...document.querySelectorAll<HTMLElement>('#ifb-bar .ifb-actions .ifb')]
+      .map(e => Math.round(e.getBoundingClientRect().left))
+    const verbs = document.querySelector<HTMLElement>('#ifb-bar .ifb-verbs')!.getBoundingClientRect()
+    const actions = document.querySelector<HTMLElement>('#ifb-bar .ifb-actions')!.getBoundingClientRect()
+    return { lefts, verbsRight: Math.round(verbs.right), actionsLeft: Math.round(actions.left) }
+  })
+  expect(box.actionsLeft).toBeGreaterThanOrEqual(box.verbsRight - 1)
+  expect(new Set(box.lefts).size).toBe(1)      // one column, so one shared left edge
 })
 
 test('verb then word sends the pair, and clears the armed state', async ({ page }) => {
   await tapVerb(page, 'Take')
   expect(await page.locator('.ifb-armed').count()).toBe(1)
   await tapWord(page, 'mailbox')
-  expect(await page.evaluate(() => window.SYN.submitted())).toEqual(['take mailbox'])
+  expect(await page.inputValue('.Input.LineInput')).toBe('take mailbox')
+  expect(await page.evaluate(() => window.SYN.submitted())).toEqual([])
   expect(await page.locator('.ifb-armed').count()).toBe(0)
 })
 
@@ -85,14 +136,15 @@ test('word then verb sends the same pair (either order)', async ({ page }) => {
   await tapWord(page, 'egg')
   expect(await page.locator('.ifb-armed').count()).toBe(1)
   await tapVerb(page, 'Examine')
-  expect(await page.evaluate(() => window.SYN.submitted())).toEqual(['examine egg'])
+  // Either order must compose the SAME text, not "egg examine".
+  expect(await page.inputValue('.Input.LineInput')).toBe('examine egg')
   expect(await page.locator('.ifb-armed').count()).toBe(0)
 })
 
 test('a multi-word verb pairs correctly', async ({ page }) => {
   await tapVerb(page, 'Turn on')
   await tapWord(page, 'mailbox')
-  expect(await page.evaluate(() => window.SYN.submitted())).toEqual(['turn on mailbox'])
+  expect(await page.inputValue('.Input.LineInput')).toBe('turn on mailbox')
 })
 
 test('cancel clears an armed verb and sends nothing', async ({ page }) => {
@@ -168,6 +220,7 @@ test('residue left in the field is replaced, not appended to', async ({ page }) 
   })
   await tapVerb(page, 'Take')
   await tapWord(page, 'mailbox')
+  await page.locator('#ifb-bar .ifb-enter').click()
   expect(await page.evaluate(() => window.SYN.submitted())).toEqual(['take mailbox'])
 })
 
@@ -184,6 +237,7 @@ test('new output is decorated as it arrives, and stays tappable', async ({ page 
   await expect(page.locator('.ifb-word', { hasText: 'lantern' }).first()).toBeVisible()
   await tapVerb(page, 'Take')
   await tapWord(page, 'lantern')
+  await page.locator('#ifb-bar .ifb-enter').click()
   expect(await page.evaluate(() => window.SYN.submitted())).toEqual(['take lantern'])
 })
 
@@ -257,27 +311,41 @@ test('the bar is at most three buttons tall', async ({ page }) => {
   expect(m.height).toBeGreaterThanOrEqual(m.btn)
 })
 
-test('extra buttons make the bar scroll rather than grow', async ({ page }) => {
-  const before = await page.evaluate(() => document.getElementById('ifb-bar')!.getBoundingClientRect().height)
-  // Far more verbs than can fit in three rows.
-  await page.evaluate(() => {
-    window.IFButtons.saveVerbs(Array.from({ length: 30 }, (_, i) => 'verb' + i))
-    window.IFButtons.renderVerbs()
-  })
-  const after = await page.evaluate(() => {
+test('buttons that will not fit scroll inside the bar rather than growing it', async ({ page }) => {
+  // A tablet in portrait is narrow enough that the default verb list needs more than three rows.
+  // Measured widths with the 23 default verbs: 1280px and 900px fit in <=3 rows and do not scroll;
+  // 820px and below overflow. Both halves of that are the specified behaviour, so assert both.
+  await page.setViewportSize({ width: 1280, height: 900 })
+  await page.waitForTimeout(150)
+  const wide = await page.evaluate(() => {
     const bar = document.getElementById('ifb-bar')!
+    return { h: Math.round(bar.getBoundingClientRect().height), scroll: bar.scrollHeight }
+  })
+  expect(wide.scroll).toBeLessThanOrEqual(wide.h + 2)     // roomy: nothing to scroll
+
+  await page.setViewportSize({ width: 820, height: 1100 })
+  await page.waitForTimeout(150)
+  const narrow = await page.evaluate(() => {
+    const bar = document.getElementById('ifb-bar')!
+    const cs = getComputedStyle(document.documentElement)
+    const rows = Number.parseFloat(cs.getPropertyValue('--ifb-rows'))
+    const btn = Number.parseFloat(cs.getPropertyValue('--ifb-btn-h'))
+    const gap = Number.parseFloat(cs.getPropertyValue('--ifb-gap'))
     return {
-      height: bar.getBoundingClientRect().height,
-      scrollHeight: bar.scrollHeight,
+      h: Math.round(bar.getBoundingClientRect().height),
+      scroll: bar.scrollHeight,
       overflowY: getComputedStyle(bar).overflowY,
+      budget: rows * btn + (rows - 1) * gap + 16,
+      pageScrollsSideways: document.documentElement.scrollWidth > document.documentElement.clientWidth,
     }
   })
-  // The bar did not get taller...
-  expect(after.height).toBeLessThanOrEqual(before + 1)
-  // ...the content overflows and is reachable by scrolling instead.
-  expect(after.scrollHeight).toBeGreaterThan(after.height + 5)
-  expect(after.overflowY).toMatch(/auto|scroll/)
-  await page.evaluate(() => window.IFButtons.resetVerbs())
+  // Still capped at three rows...
+  expect(narrow.h).toBeLessThanOrEqual(narrow.budget + 1)
+  // ...with the remainder reachable by scrolling the bar, not by the bar getting taller.
+  expect(narrow.scroll).toBeGreaterThan(narrow.h + 5)
+  expect(narrow.overflowY).toMatch(/auto|scroll/)
+  // And it must never push the page sideways.
+  expect(narrow.pageScrollsSideways).toBe(false)
 })
 
 test('the reservation matches the bar exactly, so nothing is hidden', async ({ page }) => {
@@ -354,7 +422,7 @@ test('the movement pad is laid out NW/N/NE/Up, W/↵/E/Down, SW/S/SE/gear', asyn
 test('the pad is the leftmost thing in the bar, everything else to its right', async ({ page }) => {
   const m = await page.evaluate(() => {
     const pad = document.querySelector<HTMLElement>('#ifb-bar .ifb-moves')!.getBoundingClientRect()
-    const others = [...document.querySelectorAll<HTMLElement>('#ifb-bar .ifb-verbs, #ifb-bar .ifb-cmds')]
+    const others = [...document.querySelectorAll<HTMLElement>('#ifb-bar .ifb-verbs, #ifb-bar .ifb-actions')]
       .map(g => ({ cls: g.className, left: Math.round(g.getBoundingClientRect().left) }))
     return { padLeft: Math.round(pad.left), padRight: Math.round(pad.right), others }
   })
@@ -386,6 +454,67 @@ test('↵ dismisses a pager rather than doing nothing', async ({ page }) => {
   await page.locator('#ifb-bar .ifb-enter').click()
   await expect(page.locator('.MorePrompt')).toHaveCount(0)
   expect(await page.evaluate(() => window.IFButtons.inputMode())).toBe('line')
+})
+
+test('the settings editor replaces the buttons, and Close brings them back', async ({ page }) => {
+  const row = page.locator('#ifb-bar .ifb-row')
+  const editor = page.locator('#ifb-editor')
+  await expect(row).toBeVisible()
+  await expect(editor).toBeHidden()
+
+  await page.locator('#ifb-bar .ifb-editverbs').click()
+  // In place of, not alongside.
+  await expect(row).toBeHidden()
+  await expect(editor).toBeVisible()
+  await expect(page.locator('#ifb-editor .ifb-closeeditor')).toBeVisible()
+  await expect(page.locator('#ifb-editor .ifb-newverb')).toBeVisible()
+
+  await page.locator('#ifb-editor .ifb-closeeditor').click()
+  await expect(row).toBeVisible()
+  await expect(editor).toBeHidden()
+  // The buttons work again.
+  await page.evaluate(() => window.SYN.reset())
+  await tapControl(page, 'ifb-move', 'N')
+  expect(await page.evaluate(() => window.SYN.submitted())).toEqual(['north'])
+})
+
+test('the editor honours the three-row cap and scrolls instead of growing', async ({ page }) => {
+  await page.setViewportSize({ width: 820, height: 1100 })
+  const capped = await page.evaluate(() => {
+    const cs = getComputedStyle(document.documentElement)
+    const rows = Number.parseFloat(cs.getPropertyValue('--ifb-rows'))
+    const btn = Number.parseFloat(cs.getPropertyValue('--ifb-btn-h'))
+    const gap = Number.parseFloat(cs.getPropertyValue('--ifb-gap'))
+    return rows * btn + (rows - 1) * gap + 16
+  })
+  await page.locator('#ifb-bar .ifb-editverbs').click()
+  const m = await page.evaluate(() => {
+    const bar = document.getElementById('ifb-bar')!
+    return {
+      h: Math.round(bar.getBoundingClientRect().height),
+      scroll: bar.scrollHeight,
+      reserved: Number.parseFloat(getComputedStyle(document.documentElement)
+        .getPropertyValue('--ifb-bar-height')),
+    }
+  })
+  expect(m.h).toBeLessThanOrEqual(capped + 1)
+  expect(m.reserved).toBe(m.h)           // the reservation follows the editor too
+  expect(m.scroll).toBeGreaterThan(m.h)  // one chip per verb needs more than three rows
+  await page.locator('#ifb-editor .ifb-closeeditor').click()
+})
+
+test('adding a verb from the editor keeps it open and updates both lists', async ({ page }) => {
+  await page.evaluate(() => window.IFButtons.saveVerbs(['take']))
+  await page.evaluate(() => window.IFButtons.renderVerbs())
+  await page.locator('#ifb-bar .ifb-editverbs').click()
+  await page.locator('#ifb-editor .ifb-newverb').fill('dig')
+  await page.locator('#ifb-editor .ifb-addverb').click()
+  await expect(page.locator('#ifb-editor')).toBeVisible()
+  expect(await page.locator('#ifb-editor .ifb-verbchip').count()).toBe(2)
+  await page.locator('#ifb-editor .ifb-closeeditor').click()
+  const verbs = (await page.locator('#ifb-bar .ifb-verb').allTextContents()).map(v => v.toLowerCase())
+  expect(verbs).toEqual(['take', 'dig'])
+  await page.evaluate(() => window.IFButtons.resetVerbs())
 })
 
 test('the page raised no uncaught errors', async ({ page }) => {

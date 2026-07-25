@@ -4,9 +4,22 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 ## What this is
 
-`glk-touch` — a touch command overlay (compass, no-argument commands, editable verb buttons, tappable
-story words) injected into an existing **GlkOte**-based browser interactive-fiction player via two
-tags. Zero runtime dependencies, no framework, ES2018 IIFE bundle. MIT.
+`glk-touch` — a touch command overlay injected into an existing **GlkOte**-based browser
+interactive-fiction player via two tags. Zero runtime dependencies, no framework, ES2018 IIFE bundle.
+MIT.
+
+**The interaction model**, left to right across the bar — get this wrong and nothing else makes sense:
+
+| Group | Contents | On tap |
+|-------|----------|--------|
+| `.ifb-moves` | 10 directions, plus ↵ in the centre and ⚙ in the corner | directions **SEND** at once (movement is wanted every turn); ↵ sends what is staged |
+| `.ifb-verbs` | ONE editable list holding every other word — `look` and `undo` sit beside `take` and `examine` | **STAGES** text into the host's input and sends nothing; the player presses ↵ |
+| `.ifb-actions` | ✕ and, on a map host, ⊞ — stacked vertically at the right | act immediately, because neither sends a command |
+
+There is no longer a separate "commands" group: a no-argument command and a verb that wants a noun
+differ only in whether the player taps a story word next. Staging reads the composed text out of
+`command-model.ts` rather than appending to the field, which is what preserves either-order pairing
+(`lamp` then `Examine` stages `examine lamp`, not `lamp examine`).
 
 Read [README.md](README.md) for user-facing behaviour and
 [2026-07-24-glk-touch-addon.md](2026-07-24-glk-touch-addon.md) — the full implementation plan (§0 is
@@ -49,14 +62,19 @@ These are architectural contracts, not preferences — breaking one breaks the p
    `dist/` in the same change as any `src/` edit**.
 3. **The bundle must stay a classic script.** `scripts/ci.sh` greps `dist/` for `import`/`export`;
    hosts load it with a bare `<script src>`.
-4. **Browser floor is ES2018** (Chrome 64+, Safari 11.1+, Firefox 78+, Edge 79+), set by Unicode
+4. **The bar is at most three button rows.** `--ifb-rows`/`--ifb-btn-h`/`--ifb-gap` derive the cap;
+   anything beyond scrolls inside the bar. `.ifb-row` and `#ifb-editor` must keep `flex: 0 0 auto` —
+   `#ifb-bar` is a column flex container with a max-height, so the default `flex-shrink: 1` CLIPS the
+   overflow instead of letting it scroll. And `measureBar()` writes the bar's real height into
+   `--ifb-bar-height`: a fixed guess under-reserved by ~180px and buried the live input line.
+5. **Browser floor is ES2018** (Chrome 64+, Safari 11.1+, Firefox 78+, Edge 79+), set by Unicode
    property escapes `/\p{L}/u` so accented and non-English nouns are tappable. Do not reach for newer
    DOM APIs — e.g. `renderEditor()` uses a `removeChild` loop rather than bulk child replacement
    precisely because the latter needs Safari 14+.
-5. **`docs/COMPATIBILITY.md` is a deliverable, not a note.** A downstream deployment consumes it. It
+6. **`docs/COMPATIBILITY.md` is a deliverable, not a note.** A downstream deployment consumes it. It
    is now filled in from automated real-host runs; keep it in step with what `npm run test:e2e`
    actually proves. Still outstanding: a physical tablet (plan Task 5.3).
-6. **Submit with `keypress` ONLY.** `fireKey()` deliberately dispatches no `keydown`/`keyup`. Adding
+7. **Submit with `keypress` ONLY.** `fireKey()` deliberately dispatches no `keydown`/`keyup`. Adding
    `keydown` makes a legacy jQuery-based GlkOte clear its input field and submit an **empty** command,
    silently costing the player a turn — its own body-keydown handler runs before our keypress can be
    read. `keypress` alone is delivered by both a modern AsyncGlk host and a legacy one. The measurement

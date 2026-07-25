@@ -109,6 +109,7 @@ test.describe('real Parchmap (legacy core + auto-map)', () => {
     await page.locator('.Input.LineInput').fill('ta')
     await page.locator('#ifb-bar .ifb-verb').filter({ hasText: /^Take$/ }).click()
     await page.locator('.ifb-word').filter({ hasText: /^building$/ }).first().click()
+    await page.locator('#ifb-bar .ifb-enter').click()
 
     await expect.poll(() => echoedViaLocators(page), { timeout: 20_000 }).toContain('take building')
     const echoed = await echoedViaLocators(page)

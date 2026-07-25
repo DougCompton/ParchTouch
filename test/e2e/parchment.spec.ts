@@ -84,7 +84,8 @@ test.describe('real Parchment (AsyncGlk)', () => {
   })
 
   test('Look and Inventory work by tap alone (P5-AC2)', async ({ page }) => {
-    await tapControl(page, 'ifb-cmd', 'Inv')
+    await tapVerb(page, 'Inventory')
+    await page.locator('#ifb-bar .ifb-enter').click()
     await expect.poll(() => echoedCommands(page)).toContain('inventory')
     await expect.poll(() => bufferText(page)).toMatch(/carrying|empty[- ]handed/i)
   })
@@ -93,6 +94,7 @@ test.describe('real Parchment (AsyncGlk)', () => {
     await tapVerb(page, 'Take')
     expect(await page.locator('.ifb-armed').count()).toBe(1)
     await tapWord(page, 'building')
+    await page.locator('#ifb-bar .ifb-enter').click()
     await expect.poll(() => echoedCommands(page)).toContain('take building')
     // The interpreter parsed it as a real command rather than rejecting it as unknown wording.
     expect(await bufferText(page)).not.toMatch(/don't know the word|not a verb I recognise/i)
@@ -102,6 +104,7 @@ test.describe('real Parchment (AsyncGlk)', () => {
   test('noun then verb is identical in effect (either order)', async ({ page }) => {
     await tapWord(page, 'building')
     await tapVerb(page, 'Examine')
+    await page.locator('#ifb-bar .ifb-enter').click()
     await expect.poll(() => echoedCommands(page)).toContain('examine building')
   })
 
@@ -130,7 +133,8 @@ test.describe('real Parchment (AsyncGlk)', () => {
      * element and toggles visibility. Deterministic coverage of both lives in
      * synthetic-glkote.spec.ts, which can force the state on demand.
      */
-    await tapControl(page, 'ifb-cmd', 'Look')
+    await tapVerb(page, 'Look')
+    await page.locator('#ifb-bar .ifb-enter').click()
     await expect.poll(() => echoedCommands(page)).toContain('look')
     expect(await page.locator('.MorePrompt').count()).toBe(0)
     expect(await page.evaluate(() => window.IFButtons.inputMode())).toBe('line')
@@ -175,10 +179,12 @@ test.describe('real Parchment (AsyncGlk)', () => {
     // Movement, a no-argument command, and a verb+noun action — the plan's definition of a full turn.
     await tapControl(page, 'ifb-move', 'N')
     await expect.poll(() => echoedCommands(page)).toContain('north')
-    await tapControl(page, 'ifb-cmd', 'Look')
+    await tapVerb(page, 'Look')
+    await page.locator('#ifb-bar .ifb-enter').click()
     await expect.poll(() => echoedCommands(page)).toContain('look')
     await tapVerb(page, 'Examine')
     await tapWord(page, 'forest')
+    await page.locator('#ifb-bar .ifb-enter').click()
     await expect.poll(() => echoedCommands(page)).toContain('examine forest')
 
     const echoed = await echoedCommands(page)

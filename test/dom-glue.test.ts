@@ -488,6 +488,214 @@ describe('pressEnter', () => {
   })
 })
 
+describe('staging and cancelling', () => {
+  let glue: Glue
+  beforeEach(async () => { glue = await loadGlue() })
+
+  it('stageCommand writes the text into the field WITHOUT sending it', () => {
+    makeBuffer(['x'], { withInput: true })
+    const input = liveInput()
+    const keys: string[] = []
+    input.addEventListener('keypress', e => keys.push(e.type))
+    expect(glue.stageCommand('take lamp')).toBe(true)
+    expect(input.value).toBe('take lamp')
+    expect(keys).toEqual([])            // nothing submitted
+  })
+
+  it('stageCommand fires an input event so a host autocomplete can react', () => {
+    makeBuffer(['x'], { withInput: true })
+    const handler = vi.fn()
+    liveInput().addEventListener('input', handler)
+    glue.stageCommand('take')
+    expect(handler).toHaveBeenCalled()
+  })
+
+  it('stageCommand replaces rather than appends', () => {
+    makeBuffer(['x'], { withInput: true })
+    const input = liveInput()
+    input.value = 'residue'
+    glue.stageCommand('look')
+    expect(input.value).toBe('look')
+  })
+
+  it('stageCommand reports failure when there is no input to stage into', () => {
+    makeBuffer(['Press any key.'])
+    expect(glue.stageCommand('look')).toBe(false)
+  })
+
+  it('a verb tap stages the verb and sends nothing', () => {
+    makeBuffer(['a lamp'], { withInput: true })
+    glue.buildBar()
+    const input = liveInput()
+    const keys: string[] = []
+    input.addEventListener('keypress', e => keys.push(e.type))
+    const look = [...document.querySelectorAll<HTMLButtonElement>('#ifb-bar .ifb-verb')]
+      .find(b => /^look$/i.test(b.textContent ?? ''))
+    look?.click()
+    expect(input.value).toBe('look')
+    expect(keys).toEqual([])
+  })
+
+  it('a verb+noun pair stages the whole command and still sends nothing', () => {
+    const bw = makeBuffer(['a lamp'], { withInput: true })
+    glue.decorateBuffer(bw)
+    glue.buildBar()
+    const input = liveInput()
+    const keys: string[] = []
+    input.addEventListener('keypress', e => keys.push(e.type))
+    const take = [...document.querySelectorAll<HTMLButtonElement>('#ifb-bar .ifb-verb')]
+      .find(b => /^take$/i.test(b.textContent ?? ''))
+    take?.click()
+    expect(input.value).toBe('take')
+    ;[...bw.querySelectorAll<HTMLElement>('.ifb-word')].find(n => n.textContent === 'lamp')?.click()
+    expect(input.value).toBe('take lamp')
+    expect(keys).toEqual([])
+  })
+
+  it('a direction still sends immediately — movement needs no confirmation', () => {
+    makeBuffer(['x'], { withInput: true })
+    glue.buildBar()
+    const input = liveInput()
+    const keys: number[] = []
+    input.addEventListener('keypress', e => keys.push((e as KeyboardEvent).keyCode))
+    const north = [...document.querySelectorAll<HTMLButtonElement>('#ifb-bar .ifb-move')]
+      .find(b => b.textContent === 'N')
+    north?.click()
+    expect(input.value).toBe('north')
+    expect(keys).toEqual([13])
+  })
+
+  it('cancelPending clears the armed state AND the staged text', () => {
+    const bw = makeBuffer(['a lamp'], { withInput: true })
+    glue.decorateBuffer(bw)
+    glue.buildBar()
+    const take = [...document.querySelectorAll<HTMLButtonElement>('#ifb-bar .ifb-verb')]
+      .find(b => /^take$/i.test(b.textContent ?? ''))
+    take?.click()
+    expect(liveInput().value).toBe('take')
+    glue.cancelPending()
+    expect(liveInput().value).toBe('')
+    expect(glue.currentState().pendingVerb).toBe(null)
+    expect(document.querySelectorAll('.ifb-armed').length).toBe(0)
+  })
+
+  it('the cancel button clears the staged text', () => {
+    makeBuffer(['x'], { withInput: true })
+    glue.buildBar()
+    const look = [...document.querySelectorAll<HTMLButtonElement>('#ifb-bar .ifb-verb')]
+      .find(b => /^look$/i.test(b.textContent ?? ''))
+    look?.click()
+    expect(liveInput().value).toBe('look')
+    document.querySelector<HTMLButtonElement>('#ifb-bar .ifb-cancel')?.click()
+    expect(liveInput().value).toBe('')
+  })
+
+  it('cancelPending does not throw when there is no input', () => {
+    expect(() => glue.cancelPending()).not.toThrow()
+  })
+})
+
+describe('settings editor', () => {
+  let glue: Glue
+  beforeEach(async () => { glue = await loadGlue() })
+
+  it('is closed to begin with', () => {
+    glue.buildBar()
+    expect(glue.isEditorOpen()).toBe(false)
+    expect(document.getElementById('ifb-bar')?.classList.contains('ifb-editing')).toBe(false)
+  })
+
+  it('the gear opens it, and it takes the place of the control row', () => {
+    glue.buildBar()
+    document.querySelector<HTMLButtonElement>('#ifb-bar .ifb-editverbs')?.click()
+    expect(glue.isEditorOpen()).toBe(true)
+    // A single class on the bar swaps the two; the row is still in the DOM, just not shown.
+    expect(document.getElementById('ifb-bar')?.classList.contains('ifb-editing')).toBe(true)
+    expect(document.querySelector('#ifb-bar .ifb-row')).not.toBe(null)
+  })
+
+  it('is populated before it is shown, so it never flashes empty', () => {
+    glue.buildBar()
+    glue.openEditor()
+    // add field, Add, Defaults, Close, plus one chip per verb
+    expect(document.querySelector('#ifb-editor .ifb-newverb')).not.toBe(null)
+    expect(document.querySelector('#ifb-editor .ifb-closeeditor')).not.toBe(null)
+    expect(document.querySelectorAll('#ifb-editor .ifb-verbchip').length).toBe(glue.loadVerbs().length)
+  })
+
+  it('has a Close button that gives the buttons back', () => {
+    glue.buildBar()
+    glue.openEditor()
+    expect(glue.isEditorOpen()).toBe(true)
+    document.querySelector<HTMLButtonElement>('#ifb-editor .ifb-closeeditor')?.click()
+    expect(glue.isEditorOpen()).toBe(false)
+    expect(document.getElementById('ifb-bar')?.classList.contains('ifb-editing')).toBe(false)
+  })
+
+  it('the gear toggles rather than only opening', () => {
+    glue.buildBar()
+    const gear = document.querySelector<HTMLButtonElement>('#ifb-bar .ifb-editverbs')
+    gear?.click()
+    expect(glue.isEditorOpen()).toBe(true)
+    gear?.click()
+    expect(glue.isEditorOpen()).toBe(false)
+  })
+
+  it('gives the Close button an accessible name', () => {
+    glue.buildBar()
+    glue.openEditor()
+    expect(document.querySelector('#ifb-editor .ifb-closeeditor')?.getAttribute('aria-label'))
+      .toBeTruthy()
+  })
+
+  it('stays open while verbs are added and removed, and tracks the list', () => {
+    glue.saveVerbs(['take'])
+    glue.buildBar()
+    glue.openEditor()
+    glue.addVerbFromUI('dig')
+    expect(glue.isEditorOpen()).toBe(true)
+    expect(document.querySelectorAll('#ifb-editor .ifb-verbchip').length).toBe(2)
+    glue.removeVerbFromUI('take')
+    expect(document.querySelectorAll('#ifb-editor .ifb-verbchip').length).toBe(1)
+    expect(glue.isEditorOpen()).toBe(true)
+  })
+
+  it('does not throw when there is no bar to open it in', () => {
+    expect(() => glue.openEditor()).not.toThrow()
+    expect(() => glue.closeEditor()).not.toThrow()
+    expect(glue.isEditorOpen()).toBe(false)
+  })
+})
+
+describe('actions column', () => {
+  let glue: Glue
+  beforeEach(async () => { glue = await loadGlue() })
+
+  it('holds the cancel button, and no separate commands group exists', () => {
+    glue.buildBar()
+    expect(document.querySelector('#ifb-bar .ifb-actions .ifb-cancel')).not.toBe(null)
+    expect(document.querySelector('#ifb-bar .ifb-cmds')).toBe(null)
+    expect(document.querySelectorAll('#ifb-bar .ifb-cmd').length).toBe(0)
+  })
+
+  it('receives the map toggle when a map host is detected', () => {
+    makeBuffer(['x'], { withInput: true })
+    const map = document.createElement('div')
+    map.id = 'map'
+    document.body.appendChild(map)
+    glue.boot(1)
+    expect(document.querySelector('#ifb-bar .ifb-actions .ifb-maptoggle')).not.toBe(null)
+    glue.stopBoot()
+  })
+
+  it('is the last group in the row, after the verbs', () => {
+    glue.buildBar()
+    const groups = [...document.querySelectorAll('#ifb-bar .ifb-group')]
+      .map(g => g.className.replace('ifb-group ', ''))
+    expect(groups).toEqual(['ifb-moves', 'ifb-verbs', 'ifb-actions'])
+  })
+})
+
 describe('movement pad composition', () => {
   let glue: Glue
   beforeEach(async () => { glue = await loadGlue() })

@@ -4,9 +4,9 @@ On-screen commands for **GlkOte**-based interactive fiction players — play par
 keyboard.
 
 Parser IF means typing a command every turn, which is miserable on a tablet where a software keyboard
-covers a third of the screen. `glk-touch` overlays a compass, the common no-argument commands, and an
-editable set of verbs onto an existing browser IF player, and makes every word in the story text
-tappable — so a whole session needs zero keystrokes.
+covers a third of the screen. `glk-touch` overlays a direction pad and an editable word list onto an
+existing browser IF player, and makes every word in the story text tappable — so a whole session needs
+zero keystrokes.
 
 MIT licensed. **Zero runtime dependencies**, no framework, one plain `<script>` tag.
 
@@ -274,11 +274,36 @@ Open **`http://localhost:8080/play.html?story=games/Advent.z5.js`**, or pick the
 
 ## Using it
 
-- **Move:** tap a compass direction, or `Up` / `Down`.
-- **Object commands:** tap a verb (`Take`), then tap the object's word **in the story text** — either
-  order works, and **✕** cancels. Tapping the word the game actually printed is exact, so there is no
-  guessing at nouns.
-- **Edit the verbs:** **⚙** adds, removes, or restores the defaults. Saved per browser.
+The bar has three parts, left to right.
+
+**The direction pad** — the only buttons that send immediately, because movement is wanted every turn
+and needs no confirming:
+
+```
+NW   N   NE   Up
+W    ↵   E    Down
+SW   S   SE   ⚙
+```
+
+- **↵** sends whatever is currently in the input box. It also advances a *press any key* prompt and
+  dismisses a `-- more --` pager, which is what to reach for when a tap seems to do nothing.
+- **⚙** opens settings, which **takes the place of the buttons** so it has room; its **✕ Close**
+  button brings them back.
+
+**The word list** (middle) — one editable list of everything else: `look`, `inventory`, `take`,
+`examine`, `again`, `undo`, `save` and so on. Tapping one **stages** text into the input box and sends
+nothing, so you can see exactly what will be sent and change your mind for free. Press **↵** to send it.
+
+- For a command that needs no object, one tap then **↵**: `Look` → `look` → send.
+- For one that takes an object, tap the word **in the story text**: `Take` then "lamp" stages
+  `take lamp`. **Either order works** — tapping "lamp" then `Examine` stages `examine lamp`, not
+  `lamp examine`.
+- The list scrolls if it does not fit; the bar itself is never more than three buttons tall.
+
+**The actions column** (right) — the two controls that never send a command, so they act at once:
+
+- **✕** abandons whatever you were building and clears the input box.
+- **⊞** hides and restores the map, and appears only on a host that has one.
 
 Theming, the full troubleshooting table and per-host notes are in [docs/INSTALL.md](docs/INSTALL.md).
 
