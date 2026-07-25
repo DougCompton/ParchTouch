@@ -155,6 +155,11 @@ Things that bit and must not be undone:
 - **`WITH_PARCHMAP=0` selects an empty stand-in STAGE**, it does not `rm -rf` later. Deleting in a later
   layer left the GPL files in an earlier one — the image still carried them while claiming MIT, and was
   not a byte smaller. Verify with `docker run --rm --entrypoint sh glk-touch -c 'find / -name "Parchmap*"'`.
+- **Parchment's OWN index.html gets the overlay too** (`docker/add-overlay.mjs`). Its URL box and
+  device-upload button are the only way to play something outside the library, and without the overlay
+  those stories played with no touch bar. Injection is a node script, not sed: the replacement contains
+  quotes, slashes and a newline, and escaping that through sed + shell + the Dockerfile parser produced
+  a Dockerfile that would not parse.
 - `docker/prepare.mjs` wraps Z-machine stories for Parchmap and regenerates its `GameList.js` by
   APPENDING to a pristine `GameList.bundled.js` copy, so no parsing of upstream JS is involved.
 - The image build is deliberately NOT in `scripts/ci.sh`: it needs network and takes minutes.

@@ -331,6 +331,26 @@ games it ships with. The volume is only ever read from, so mount it `:ro`.
 - Glulx, TADS, Hugo and SCARE games play in Parchment. Parchmap is Z-machine only, and the picker says
   so per game rather than offering a link that would fail.
 
+### Playing something that is not in the library
+
+The front page also has, below the list:
+
+- **Play from URL** — paste a link to a story file.
+- **Upload from this device…** — pick a file off the tablet or laptop.
+
+Both open in **Parchment with the touch bar**, by handing off to Parchment's own picker page at
+`/parchment/`, which has the overlay injected at build time. An upload is read by Parchment's own loader
+and never reaches the server; a local file cannot be passed to a page through a URL, so there is nothing
+to reimplement here.
+
+Two caveats worth knowing:
+
+- **Parchmap can take neither.** Its bundled core loads a JS-wrapped copy from the library, so a URL or
+  an upload is Parchment-only.
+- A **cross-origin URL needs internet.** Parchment fetches `ifarchive.org` (and its mirrors) directly,
+  but routes anything else through its CORS proxy. A same-origin URL — anything on this server — is
+  fetched directly and works offline, as does the library itself.
+
 ### Build options
 
 | Build arg | Default | What |

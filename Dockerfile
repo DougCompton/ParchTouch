@@ -48,6 +48,12 @@ WORKDIR /p
 RUN npm install --no-audit --no-fund && npm run build
 # The .map files are a large fraction of the image and are useless in a served build.
 RUN find dist -name '*.map' -delete
+# Its OWN picker page keeps a URL box and a device-upload button, and those are the only way to play
+# something that is not in the library — so the overlay goes on that page too. Without this, a story
+# loaded by URL or upload plays with no touch bar, which is the one thing this image exists for.
+# ../dist/ because the page is served from /parchment/.
+COPY docker/add-overlay.mjs /tmp/add-overlay.mjs
+RUN node /tmp/add-overlay.mjs index.html ../
 
 
 # ── 3. Parchmap (GPL-3.0), patched for offline use ────────────────────────────────────────────────

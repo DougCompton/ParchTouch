@@ -46,6 +46,20 @@
   .only { flex: 0 0 auto; color: var(--dim); font-size: .8rem; }
   .empty, .err { padding: 16px; border: 1px dashed var(--line); border-radius: 8px; color: var(--dim); }
   code { background: rgba(127,127,127,.18); padding: .1em .35em; border-radius: 4px; }
+  section.load { margin-top: 1.75rem; padding-top: 1.25rem; border-top: 1px solid var(--line); }
+  section.load h2 { font-size: 1rem; margin: 0 0 .4em; }
+  .loadrow { display: flex; flex-wrap: wrap; gap: 10px; align-items: center; }
+  .loadrow input[type=url] {
+    flex: 1 1 18rem; min-width: 0; min-height: 44px; padding: 6px 10px; font-size: 16px;
+    border: 1px solid var(--line); border-radius: 8px; background: transparent; color: var(--fg);
+  }
+  button.play {
+    flex: 0 0 auto; min-height: 44px; padding: 6px 14px; font: inherit; font-size: .9rem;
+    border: 1px solid var(--accent); border-radius: 8px; background: transparent;
+    color: var(--accent); cursor: pointer;
+  }
+  button.play:hover, button.play:focus-visible { background: var(--accent); color: var(--bg); }
+  .hint { color: var(--dim); font-size: .82rem; margin: .6em 0 0; }
   footer { margin-top: 2rem; color: var(--dim); font-size: .8rem; }
   footer a { color: var(--accent); }
 </style>
@@ -55,6 +69,16 @@
   <h1>Story library</h1>
   <p class="sub" id="sub">Reading your library…</p>
   <div id="out"></div>
+
+  <section class="load">
+    <h2>Load another story</h2>
+    <div class="loadrow">
+      <input id="url" type="url" placeholder="https://… a story file" aria-label="URL of a story file">
+      <button class="play" id="go" type="button">Play from URL</button>
+      <a class="play" id="upload" href="parchment/index.html">Upload from this device…</a>
+    </div>
+    <p class="hint" id="hint"></p>
+  </section>
 
   <footer>
     <p>
@@ -158,6 +182,29 @@
       .then(function (r) { return r.ok })
       .catch(function () { return false })
   }
+
+  /*
+   * Both of these hand off to PARCHMENT'S OWN page rather than the lean one used for the library.
+   * That is deliberate:
+   *   - a device upload is read by Parchment's own loader; a page cannot be handed a local file
+   *     through a URL, so there is nothing to reimplement here.
+   *   - arbitrary URLs need the defaults that page ships with (its CORS proxy, and ifarchive.org in
+   *     direct_domains). The library page sets use_proxy:0 on purpose, since a same-origin library
+   *     must keep working with no internet at all.
+   * Parchment only: Parchmap's core loads a JS-wrapped local file, so it can take neither.
+   */
+  function playFromUrl() {
+    var v = document.getElementById('url').value.trim()
+    if (!v) { return }
+    location.href = 'parchment/index.html?story=' + encodeURIComponent(v)
+  }
+  document.getElementById('go').addEventListener('click', playFromUrl)
+  document.getElementById('url').addEventListener('keydown', function (e) {
+    if (e.key === 'Enter') { playFromUrl() }
+  })
+  document.getElementById('hint').textContent =
+    'Both open in Parchment, with the touch bar. Parchmap cannot take a URL or an upload — it loads a '
+    + 'wrapped copy from the library instead. Free stories: ifarchive.org'
 
   Promise.all([
     fetch('stories/', { headers: { Accept: 'application/json' } }).then(function (r) {
