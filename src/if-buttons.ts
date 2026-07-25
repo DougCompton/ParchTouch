@@ -42,7 +42,7 @@
 import {
   createState, clearPending, tapVerb, tapWord, tapDirect, tokenize, normalizeVerb,
   DEFAULT_VERBS,
-  addVerb as addVerbToList, removeVerb as removeVerbFromList,
+  addVerb as addVerbToList, removeVerb as removeVerbFromList, moveVerb as moveVerbInList,
   type CommandState, type TapResult,
 } from './command-model'
 
@@ -72,6 +72,11 @@ export interface DebugHandle {
   resetVerbs: typeof resetVerbs
   addVerbFromUI: typeof addVerbFromUI
   removeVerbFromUI: typeof removeVerbFromUI
+  moveVerbFromUI: typeof moveVerbFromUI
+  selectVerb: typeof selectVerb
+  selectedVerbName: typeof selectedVerbName
+  moveSelected: typeof moveSelected
+  deleteSelected: typeof deleteSelected
   renderVerbs: typeof renderVerbs
   openEditor: typeof openEditor
   closeEditor: typeof closeEditor
@@ -106,11 +111,16 @@ const MOVES: ReadonlyArray<readonly [string, string]> = [
 const MAP_SELECTORS = '#map, #map-container, .map-container, [data-if-map]'
 // Below this, a viewport-pinned panel is moved rather than shrunk: capping its height would collapse it.
 const MIN_LIFTED_HEIGHT = 24
+// A pointer must travel this far before it counts as a drag rather than a tap, so a slightly shaky
+// finger still selects instead of silently reordering.
+const MIN_DRAG_PX = 6
 
 let state: CommandState = createState()
 let bootTimer: ReturnType<typeof setTimeout> | null = null
 let barSizeObserver: ResizeObserver | null = null
 let barResizeBound = false
+/** The word currently picked out in the settings list; the move and delete buttons act on it. */
+let selectedVerb: string | null = null
 
 // ── GlkOte inspection ────────────────────────────────────────────────────────────────────────
 function bufferWindow(): HTMLElement | null {
@@ -475,9 +485,60 @@ export function addVerbFromUI(verb: string): void {
 }
 
 export function removeVerbFromUI(verb: string): void {
+  if (selectedVerb === verb) { selectedVerb = null }
   saveVerbs(removeVerbFromList(loadVerbs(), verb))
   renderVerbs()
   renderEditor()
+}
+
+/** Move a word to a new position, then re-render the strip and the settings list. */
+export function moveVerbFromUI(verb: string, toIndex: number): void {
+  saveVerbs(moveVerbInList(loadVerbs(), verb, toIndex))
+  renderVerbs()
+  renderEditor()
+}
+
+/**
+ * Pick out a word in the settings list, or clear the selection with null.
+ *
+ * Selection exists so that DESTRUCTIVE and REORDERING actions are a deliberate second step. Tapping a
+ * word used to delete it outright, which is unforgiving on a touch screen and made the same surface
+ * impossible to drag — a drag ends in a tap.
+ */
+export function selectVerb(verb: string | null): void {
+  selectedVerb = verb !== null && loadVerbs().includes(verb) ? verb : null
+  renderSelection()
+}
+
+export function selectedVerbName(): string | null { return selectedVerb }
+
+/** Reflect the selection in the chips and in whether the actions are usable. */
+function renderSelection(): void {
+  for (const chip of document.querySelectorAll<HTMLElement>('#ifb-editor .ifb-verbchip')) {
+    const on = chip.getAttribute('data-verb') === selectedVerb
+    chip.classList.toggle('ifb-selected', on)
+    chip.setAttribute('aria-pressed', String(on))
+  }
+  const has = selectedVerb !== null
+  for (const sel of ['.ifb-moveleft', '.ifb-moveright', '.ifb-deleteverb']) {
+    const btn = document.querySelector<HTMLButtonElement>('#ifb-editor ' + sel)
+    if (btn) { btn.disabled = !has }
+  }
+}
+
+/** Shift the selected word one place, keeping it selected and focused afterwards. */
+export function moveSelected(delta: number): void {
+  const verb = selectedVerb
+  if (verb === null) { return }
+  const at = loadVerbs().indexOf(verb)
+  if (at === -1) { return }
+  moveVerbFromUI(verb, at + delta)
+  document.querySelector<HTMLElement>('#ifb-editor .ifb-verbchip[data-verb="' + verb + '"]')?.focus()
+}
+
+/** Remove the selected word. */
+export function deleteSelected(): void {
+  if (selectedVerb !== null) { removeVerbFromUI(selectedVerb) }
 }
 
 // ── UI ───────────────────────────────────────────────────────────────────────────────────────
@@ -511,6 +572,144 @@ export function renderVerbs(): void {
   measureBar()          // a different number of verbs is a different bar height
 }
 
+/*
+ * A word in the settings list.
+ *
+ * A real <button>, so it is focusable and clickable for free and satisfies the rule that every control
+ * in the bar is a button rather than a clickable div. Tapping it SELECTS it; the move and delete
+ * buttons then act on that selection. It is also a drag handle — see enableChipDragging.
+ */
+function verbChip(verb: string): HTMLButtonElement {
+  const chip = button(verb, 'ifb-verbchip', () => {
+    // A drag finishes with a pointer-up on this button, which the browser also reports as a click.
+    // Without this the reorder would immediately be followed by a selection toggle.
+    if (suppressNextChipClick) { suppressNextChipClick = false; return }
+    selectVerb(selectedVerb === verb ? null : verb)
+  }, verb + ' — tap to select, drag to reorder')
+  chip.setAttribute('data-verb', verb)
+  chip.setAttribute('aria-pressed', String(selectedVerb === verb))
+
+  chip.addEventListener('keydown', e => {
+    // Reordering must not be drag-only, or it is unusable without a pointer.
+    if (e.altKey && (e.key === 'ArrowLeft' || e.key === 'ArrowRight')) {
+      e.preventDefault()
+      selectVerb(verb)
+      moveSelected(e.key === 'ArrowLeft' ? -1 : 1)
+      return
+    }
+    if (e.key === 'Delete' || e.key === 'Backspace') {
+      e.preventDefault()
+      removeVerbFromUI(verb)
+    }
+  })
+
+  return chip
+}
+
+/** True while a pointer-up should not be treated as a tap, because it ended a drag. */
+let suppressNextChipClick = false
+
+/** Index of a chip among its siblings, or -1. */
+function chipIndex(chip: Element): number {
+  return chip.parentElement ? [...chip.parentElement.children].indexOf(chip) : -1
+}
+
+/*
+ * Drag-to-reorder, including touch on a tablet.
+ *
+ * Pointer Events when available, mouse + touch otherwise: the addon advertises Safari 11.1, which
+ * predates Pointer Events. HTML5 drag-and-drop is not an option at all — it does nothing on touch,
+ * which is the primary target device.
+ *
+ * The chip is moved through the DOM as the pointer passes its neighbours, so the list previews the
+ * result with no ghost element to keep in sync, and the new index is read back from DOM order on
+ * release. `touch-action: none` on the chip is what stops the browser scrolling the bar instead of
+ * letting the drag through.
+ */
+function enableChipDragging(list: HTMLElement): void {
+  let chip: HTMLElement | null = null
+  let originX = 0
+  let moved = false
+
+  const pointFrom = (e: Event): { x: number; y: number } | null => {
+    const t = (e as TouchEvent).touches
+    if (t && t.length > 0) {
+      const first = t[0]
+      return first ? { x: first.clientX, y: first.clientY } : null
+    }
+    const m = e as MouseEvent
+    return typeof m.clientX === 'number' ? { x: m.clientX, y: m.clientY } : null
+  }
+
+  const start = (e: Event): void => {
+    const target = e.target
+    if (!(target instanceof Element)) { return }
+    const found = target.closest<HTMLElement>('.ifb-verbchip')
+    if (!found || found.parentElement !== list) { return }
+    const p = pointFrom(e)
+    chip = found
+    originX = p ? p.x : 0
+    moved = false
+  }
+
+  const move = (e: Event): void => {
+    if (!chip) { return }
+    const p = pointFrom(e)
+    if (!p) { return }
+    if (!moved && Math.abs(p.x - originX) < MIN_DRAG_PX) { return }   // still just a tap
+    if (!moved) { moved = true; chip.classList.add('ifb-dragging') }
+    // Only now claim the gesture, so a tap is left alone entirely.
+    if (e.cancelable) { e.preventDefault() }
+
+    // Keep a long list reachable mid-drag by nudging the bar when near its edges.
+    const bar = document.getElementById('ifb-bar')
+    if (bar) {
+      const r = bar.getBoundingClientRect()
+      if (p.y < r.top + 36) { bar.scrollTop -= 12 }
+      else if (p.y > r.bottom - 36) { bar.scrollTop += 12 }
+    }
+
+    const under = document.elementFromPoint(p.x, p.y)?.closest<HTMLElement>('.ifb-verbchip')
+    if (!under || under === chip || under.parentElement !== list) { return }
+    const box = under.getBoundingClientRect()
+    // Insert before or after by which half we are over, so a slow drag does not oscillate.
+    list.insertBefore(chip, p.x > box.left + box.width / 2 ? under.nextSibling : under)
+  }
+
+  const end = (): void => {
+    if (!chip) { return }
+    const dropped = chip
+    const wasDrag = moved
+    chip = null
+    moved = false
+    if (!wasDrag) { return }                 // a tap: leave it to the click handler to select
+    dropped.classList.remove('ifb-dragging')
+    suppressNextChipClick = true
+    const verb = dropped.getAttribute('data-verb')
+    const to = chipIndex(dropped)
+    if (verb !== null && to !== -1) {
+      selectedVerb = verb                    // a dragged word stays selected
+      moveVerbFromUI(verb, to)
+      document.querySelector<HTMLElement>('#ifb-editor .ifb-verbchip[data-verb="' + verb + '"]')?.focus()
+    }
+  }
+
+  if (typeof window.PointerEvent === 'function') {
+    list.addEventListener('pointerdown', start)
+    list.addEventListener('pointermove', move)
+    list.addEventListener('pointerup', end)
+    list.addEventListener('pointercancel', end)
+  } else {
+    list.addEventListener('mousedown', start)
+    list.addEventListener('touchstart', start, { passive: false })
+    list.addEventListener('mousemove', move)
+    list.addEventListener('touchmove', move, { passive: false })
+    list.addEventListener('mouseup', end)
+    list.addEventListener('touchend', end)
+    list.addEventListener('touchcancel', end)
+  }
+}
+
 function renderEditor(): void {
   const panel = document.getElementById('ifb-editor')
   if (!panel) { return }
@@ -539,14 +738,29 @@ function renderEditor(): void {
   row.appendChild(button('Defaults', 'ifb-resetverbs', () => resetVerbs()))
   panel.appendChild(row)
 
+  /*
+   * Actions on the SELECTED word, kept separate from the words themselves. Tapping a word used to
+   * delete it on the spot, which is unforgiving on a touch screen and made that same surface
+   * impossible to drag — a drag ends in a tap. Now a tap only selects, and reordering or deleting is a
+   * deliberate second press. They stay disabled until there is something to act on.
+   */
+  const actions = document.createElement('div')
+  actions.className = 'ifb-editrow ifb-editactions'
+  actions.appendChild(button('◀', 'ifb-moveleft', () => { moveSelected(-1) },
+    'Move the selected word earlier'))
+  actions.appendChild(button('▶', 'ifb-moveright', () => { moveSelected(1) },
+    'Move the selected word later'))
+  actions.appendChild(button('Delete', 'ifb-deleteverb', () => { deleteSelected() },
+    'Delete the selected word'))
+  panel.appendChild(actions)
+
   const list = document.createElement('div')
   list.className = 'ifb-verblist'
-  for (const v of loadVerbs()) {
-    const chip = button(v + '  ✕', 'ifb-verbchip', () => removeVerbFromUI(v))
-    chip.title = 'Remove ' + v
-    list.appendChild(chip)
-  }
+  for (const v of loadVerbs()) { list.appendChild(verbChip(v)) }
+  enableChipDragging(list)
   panel.appendChild(list)
+
+  renderSelection()      // the list was just rebuilt, so re-apply the highlight and button states
   measureBar()
 }
 
@@ -842,7 +1056,8 @@ window.IFButtons = {
   findLineInput, inputMode, submitCommand, stageCommand, cancelPending, pressEnter,
   dismissMorePrompt, decorateBuffer, watchBuffer,
   buildBar, adoptHostFeatures, measureBar, loadVerbs, saveVerbs, resetVerbs, addVerbFromUI,
-  removeVerbFromUI, renderVerbs, openEditor, closeEditor, toggleEditor, isEditorOpen,
+  removeVerbFromUI, moveVerbFromUI, selectVerb, selectedVerbName, moveSelected, deleteSelected,
+  renderVerbs, openEditor, closeEditor, toggleEditor, isEditorOpen,
   boot, stopBoot, currentState,
 }
 

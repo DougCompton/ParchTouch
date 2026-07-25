@@ -288,7 +288,10 @@ SW   S   SE   ⚙
 - **↵** sends whatever is currently in the input box. It also advances a *press any key* prompt and
   dismisses a `-- more --` pager, which is what to reach for when a tap seems to do nothing.
 - **⚙** opens settings, which **takes the place of the buttons** so it has room; its **✕ Close**
-  button brings them back.
+  button brings them back. There you can add a word, and **tap a word to select it** then use
+  **◀ ▶** to reorder or **Delete** to remove it. You can also just **drag a word** to a new position,
+  by mouse or by touch. Order matters: the strip shows three rows and scrolls, so the words you put
+  first are the ones you can reach without scrolling.
 
 **The word list** (middle) — one editable list of everything else: `look`, `inventory`, `take`,
 `examine`, `again`, `undo`, `save` and so on. Tapping one **stages** text into the input box and sends

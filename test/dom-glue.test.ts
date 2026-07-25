@@ -667,6 +667,142 @@ describe('settings editor', () => {
   })
 })
 
+describe('settings: select, move, delete', () => {
+  let glue: Glue
+  beforeEach(async () => {
+    localStorage.clear()
+    glue = await loadGlue()
+    glue.saveVerbs(['look', 'take', 'dig'])
+    glue.buildBar()
+    glue.openEditor()
+  })
+
+  const chips = () => [...document.querySelectorAll<HTMLButtonElement>('#ifb-editor .ifb-verbchip')]
+  const chip = (v: string) =>
+    document.querySelector<HTMLButtonElement>('#ifb-editor .ifb-verbchip[data-verb="' + v + '"]')
+
+  it('lists one chip per word, in list order', () => {
+    expect(chips().map(c => c.textContent)).toEqual(['look', 'take', 'dig'])
+  })
+
+  it('tapping a word SELECTS it instead of deleting it', () => {
+    chip('take')?.click()
+    expect(glue.selectedVerbName()).toBe('take')
+    expect(chip('take')?.classList.contains('ifb-selected')).toBe(true)
+    expect(chip('take')?.getAttribute('aria-pressed')).toBe('true')
+    // The word is emphatically still there — the old behaviour removed it on this very click.
+    expect(glue.loadVerbs()).toEqual(['look', 'take', 'dig'])
+  })
+
+  it('tapping the selected word again clears the selection', () => {
+    chip('take')?.click()
+    chip('take')?.click()
+    expect(glue.selectedVerbName()).toBe(null)
+    expect(document.querySelectorAll('#ifb-editor .ifb-selected').length).toBe(0)
+  })
+
+  it('selecting a different word moves the highlight', () => {
+    chip('take')?.click()
+    chip('dig')?.click()
+    expect(glue.selectedVerbName()).toBe('dig')
+    expect(document.querySelectorAll('#ifb-editor .ifb-selected').length).toBe(1)
+  })
+
+  it('the move and delete buttons are unusable until something is selected', () => {
+    const btn = (c: string) => document.querySelector<HTMLButtonElement>('#ifb-editor .' + c)
+    for (const c of ['ifb-moveleft', 'ifb-moveright', 'ifb-deleteverb']) {
+      expect(btn(c)?.disabled).toBe(true)
+    }
+    chip('take')?.click()
+    for (const c of ['ifb-moveleft', 'ifb-moveright', 'ifb-deleteverb']) {
+      expect(btn(c)?.disabled).toBe(false)
+    }
+  })
+
+  it('the right button moves the selected word one place later', () => {
+    chip('look')?.click()
+    document.querySelector<HTMLButtonElement>('#ifb-editor .ifb-moveright')?.click()
+    expect(glue.loadVerbs()).toEqual(['take', 'look', 'dig'])
+  })
+
+  it('the left button moves the selected word one place earlier', () => {
+    chip('dig')?.click()
+    document.querySelector<HTMLButtonElement>('#ifb-editor .ifb-moveleft')?.click()
+    expect(glue.loadVerbs()).toEqual(['look', 'dig', 'take'])
+  })
+
+  it('the word stays selected after a move, so it can be moved again', () => {
+    chip('dig')?.click()
+    const left = () => document.querySelector<HTMLButtonElement>('#ifb-editor .ifb-moveleft')
+    left()?.click()
+    expect(glue.selectedVerbName()).toBe('dig')
+    left()?.click()
+    expect(glue.loadVerbs()).toEqual(['dig', 'look', 'take'])
+  })
+
+  it('moving past either end is a no-op, not a crash or a lost word', () => {
+    chip('look')?.click()
+    document.querySelector<HTMLButtonElement>('#ifb-editor .ifb-moveleft')?.click()
+    expect(glue.loadVerbs()).toEqual(['look', 'take', 'dig'])
+    chip('dig')?.click()
+    document.querySelector<HTMLButtonElement>('#ifb-editor .ifb-moveright')?.click()
+    expect(glue.loadVerbs()).toEqual(['look', 'take', 'dig'])
+  })
+
+  it('the delete button removes only the selected word, and clears the selection', () => {
+    chip('take')?.click()
+    document.querySelector<HTMLButtonElement>('#ifb-editor .ifb-deleteverb')?.click()
+    expect(glue.loadVerbs()).toEqual(['look', 'dig'])
+    expect(glue.selectedVerbName()).toBe(null)
+  })
+
+  it('reordering is reflected in the verb strip, not just the editor', () => {
+    chip('dig')?.click()
+    document.querySelector<HTMLButtonElement>('#ifb-editor .ifb-moveleft')?.click()
+    expect([...document.querySelectorAll('#ifb-bar .ifb-verb')].map(b => (b.textContent ?? '').toLowerCase()))
+      .toEqual(['look', 'dig', 'take'])
+  })
+
+  it('Alt+Arrow on a focused word reorders it without a pointer', () => {
+    chip('look')?.dispatchEvent(new KeyboardEvent('keydown', { key: 'ArrowRight', altKey: true, bubbles: true }))
+    expect(glue.loadVerbs()).toEqual(['take', 'look', 'dig'])
+  })
+
+  it('a plain Arrow key does not reorder — only Alt does', () => {
+    chip('look')?.dispatchEvent(new KeyboardEvent('keydown', { key: 'ArrowRight', bubbles: true }))
+    expect(glue.loadVerbs()).toEqual(['look', 'take', 'dig'])
+  })
+
+  it('Delete on a focused word removes it', () => {
+    chip('take')?.dispatchEvent(new KeyboardEvent('keydown', { key: 'Delete', bubbles: true }))
+    expect(glue.loadVerbs()).toEqual(['look', 'dig'])
+  })
+
+  it('selecting a word that is not in the list is ignored', () => {
+    glue.selectVerb('nonesuch')
+    expect(glue.selectedVerbName()).toBe(null)
+  })
+
+  it('deleting the selected word through the API clears the selection', () => {
+    glue.selectVerb('take')
+    glue.removeVerbFromUI('take')
+    expect(glue.selectedVerbName()).toBe(null)
+  })
+
+  it('every chip is a real button, as the bar requires', () => {
+    for (const c of chips()) {
+      expect(c.tagName).toBe('BUTTON')
+      expect(c.getAttribute('type')).toBe('button')
+      expect(c.getAttribute('aria-label')).toBeTruthy()
+    }
+  })
+
+  it('moveSelected and deleteSelected do nothing with no selection', () => {
+    expect(() => { glue.moveSelected(1); glue.deleteSelected() }).not.toThrow()
+    expect(glue.loadVerbs()).toEqual(['look', 'take', 'dig'])
+  })
+})
+
 describe('actions column', () => {
   let glue: Glue
   beforeEach(async () => { glue = await loadGlue() })

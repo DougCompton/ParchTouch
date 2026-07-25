@@ -205,7 +205,26 @@
   color: var(--ifb-text);
 }
 .ifb-verblist { display: flex; gap: 6px; flex-wrap: wrap; }
-.ifb-verbchip { font-size: 14px; }
+
+/*
+ * A word in the settings list: tap to select, drag to reorder. touch-action:none is load-bearing —
+ * without it a touch drag scrolls the bar instead of moving the word.
+ */
+.ifb-verbchip {
+  font-size: 14px;
+  cursor: grab;
+  touch-action: none;
+}
+.ifb-verbchip.ifb-selected {
+  background: var(--ifb-armed);
+  border-color: var(--ifb-armed-border);
+  color: #fff;
+}
+.ifb-verbchip.ifb-dragging { cursor: grabbing; opacity: .65; border-color: var(--ifb-armed-border); }
+
+/* Actions on the selected word; plainly unavailable until something is selected. */
+.ifb-editactions .ifb[disabled] { opacity: .4; cursor: default; }
+.ifb-moveleft, .ifb-moveright { font-size: 17px; }
 /* Close is the only exit from the editor, so make it read as the primary control. */
 .ifb-closeeditor { font-weight: 600; }
 

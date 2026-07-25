@@ -1,7 +1,7 @@
 import { describe, it, expect, beforeEach } from 'vitest'
 import {
   normalizeWord, tokenize, createState, tapVerb, tapWord, tapDirect, clearPending,
-  normalizeVerb, addVerb, removeVerb,
+  normalizeVerb, addVerb, removeVerb, moveVerb,
   MAX_COMMAND_LENGTH, MAX_VERBS, DEFAULT_VERBS,
   type CommandState,
 } from '../src/command-model'
@@ -209,6 +209,63 @@ describe('command state machine', () => {
 
   it('pairs an accented noun', () => {
     expect(tapWord(tapVerb(createState(), 'examine').state, 'Café').command).toBe('examine café')
+  })
+})
+
+describe('moveVerb', () => {
+  it('moves a verb one place later', () => {
+    expect(moveVerb(['a', 'b', 'c'], 'a', 1)).toEqual(['b', 'a', 'c'])
+  })
+
+  it('moves a verb one place earlier', () => {
+    expect(moveVerb(['a', 'b', 'c'], 'c', 1)).toEqual(['a', 'c', 'b'])
+  })
+
+  it('moves a verb to the front and to the back', () => {
+    expect(moveVerb(['a', 'b', 'c'], 'c', 0)).toEqual(['c', 'a', 'b'])
+    expect(moveVerb(['a', 'b', 'c'], 'a', 2)).toEqual(['b', 'c', 'a'])
+  })
+
+  it('clamps an index past either end instead of losing the verb', () => {
+    expect(moveVerb(['a', 'b', 'c'], 'b', -5)).toEqual(['b', 'a', 'c'])
+    expect(moveVerb(['a', 'b', 'c'], 'b', 99)).toEqual(['a', 'c', 'b'])
+  })
+
+  it('moving to the position it already holds changes nothing', () => {
+    expect(moveVerb(['a', 'b', 'c'], 'b', 1)).toEqual(['a', 'b', 'c'])
+  })
+
+  it('normalizes the verb before looking for it', () => {
+    expect(moveVerb(['turn on', 'b'], '  TURN   ON ', 1)).toEqual(['b', 'turn on'])
+  })
+
+  it('a verb that is not in the list is a no-op', () => {
+    expect(moveVerb(['a', 'b'], 'zzz', 0)).toEqual(['a', 'b'])
+  })
+
+  it('handles an empty list and a single-item list', () => {
+    expect(moveVerb([], 'a', 0)).toEqual([])
+    expect(moveVerb(['a'], 'a', 5)).toEqual(['a'])
+  })
+
+  it('ignores a non-finite index', () => {
+    expect(moveVerb(['a', 'b'], 'a', Number.NaN)).toEqual(['a', 'b'])
+    expect(moveVerb(['a', 'b'], 'a', Number.POSITIVE_INFINITY)).toEqual(['a', 'b'])
+  })
+
+  it('truncates a fractional index rather than throwing', () => {
+    expect(moveVerb(['a', 'b', 'c'], 'a', 1.9)).toEqual(['b', 'a', 'c'])
+  })
+
+  it('does not mutate the list passed in', () => {
+    const original = ['a', 'b', 'c']
+    moveVerb(original, 'a', 2)
+    expect(original).toEqual(['a', 'b', 'c'])
+  })
+
+  it('ignores null and undefined verbs', () => {
+    expect(moveVerb(['a', 'b'], null, 0)).toEqual(['a', 'b'])
+    expect(moveVerb(['a', 'b'], undefined, 0)).toEqual(['a', 'b'])
   })
 })
 

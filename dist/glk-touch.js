@@ -133,6 +133,24 @@
     const v = normalizeVerb(verb);
     return list.filter((x) => x !== v);
   }
+  function moveVerb(list, verb, toIndex) {
+    const v = normalizeVerb(verb);
+    const out = list.slice();
+    const from = out.indexOf(v);
+    if (from === -1) {
+      return out;
+    }
+    if (!Number.isFinite(toIndex)) {
+      return out;
+    }
+    const to = Math.max(0, Math.min(out.length - 1, Math.trunc(toIndex)));
+    if (to === from) {
+      return out;
+    }
+    out.splice(from, 1);
+    out.splice(to, 0, v);
+    return out;
+  }
 
   // src/if-buttons.ts
   var VERBS_KEY = "IFB_Verbs";
@@ -150,10 +168,12 @@
   ];
   var MAP_SELECTORS = "#map, #map-container, .map-container, [data-if-map]";
   var MIN_LIFTED_HEIGHT = 24;
+  var MIN_DRAG_PX = 6;
   var state = createState();
   var bootTimer = null;
   var barSizeObserver = null;
   var barResizeBound = false;
+  var selectedVerb = null;
   function bufferWindow() {
     return document.querySelector(".BufferWindow");
   }
@@ -434,9 +454,56 @@
     renderEditor();
   }
   function removeVerbFromUI(verb) {
+    if (selectedVerb === verb) {
+      selectedVerb = null;
+    }
     saveVerbs(removeVerb(loadVerbs(), verb));
     renderVerbs();
     renderEditor();
+  }
+  function moveVerbFromUI(verb, toIndex) {
+    saveVerbs(moveVerb(loadVerbs(), verb, toIndex));
+    renderVerbs();
+    renderEditor();
+  }
+  function selectVerb(verb) {
+    selectedVerb = verb !== null && loadVerbs().includes(verb) ? verb : null;
+    renderSelection();
+  }
+  function selectedVerbName() {
+    return selectedVerb;
+  }
+  function renderSelection() {
+    for (const chip of document.querySelectorAll("#ifb-editor .ifb-verbchip")) {
+      const on = chip.getAttribute("data-verb") === selectedVerb;
+      chip.classList.toggle("ifb-selected", on);
+      chip.setAttribute("aria-pressed", String(on));
+    }
+    const has = selectedVerb !== null;
+    for (const sel of [".ifb-moveleft", ".ifb-moveright", ".ifb-deleteverb"]) {
+      const btn = document.querySelector("#ifb-editor " + sel);
+      if (btn) {
+        btn.disabled = !has;
+      }
+    }
+  }
+  function moveSelected(delta) {
+    var _a;
+    const verb = selectedVerb;
+    if (verb === null) {
+      return;
+    }
+    const at = loadVerbs().indexOf(verb);
+    if (at === -1) {
+      return;
+    }
+    moveVerbFromUI(verb, at + delta);
+    (_a = document.querySelector('#ifb-editor .ifb-verbchip[data-verb="' + verb + '"]')) == null ? void 0 : _a.focus();
+  }
+  function deleteSelected() {
+    if (selectedVerb !== null) {
+      removeVerbFromUI(selectedVerb);
+    }
   }
   function button(label, cls, onTap, ariaLabel) {
     const b = document.createElement("button");
@@ -462,6 +529,133 @@
       host.appendChild(button(label, "ifb-verb", (btn) => apply(tapVerb(state, v), btn, "stage")));
     }
     measureBar();
+  }
+  function verbChip(verb) {
+    const chip = button(verb, "ifb-verbchip", () => {
+      if (suppressNextChipClick) {
+        suppressNextChipClick = false;
+        return;
+      }
+      selectVerb(selectedVerb === verb ? null : verb);
+    }, verb + " \u2014 tap to select, drag to reorder");
+    chip.setAttribute("data-verb", verb);
+    chip.setAttribute("aria-pressed", String(selectedVerb === verb));
+    chip.addEventListener("keydown", (e) => {
+      if (e.altKey && (e.key === "ArrowLeft" || e.key === "ArrowRight")) {
+        e.preventDefault();
+        selectVerb(verb);
+        moveSelected(e.key === "ArrowLeft" ? -1 : 1);
+        return;
+      }
+      if (e.key === "Delete" || e.key === "Backspace") {
+        e.preventDefault();
+        removeVerbFromUI(verb);
+      }
+    });
+    return chip;
+  }
+  var suppressNextChipClick = false;
+  function chipIndex(chip) {
+    return chip.parentElement ? [...chip.parentElement.children].indexOf(chip) : -1;
+  }
+  function enableChipDragging(list) {
+    let chip = null;
+    let originX = 0;
+    let moved = false;
+    const pointFrom = (e) => {
+      const t = e.touches;
+      if (t && t.length > 0) {
+        const first = t[0];
+        return first ? { x: first.clientX, y: first.clientY } : null;
+      }
+      const m = e;
+      return typeof m.clientX === "number" ? { x: m.clientX, y: m.clientY } : null;
+    };
+    const start = (e) => {
+      const target = e.target;
+      if (!(target instanceof Element)) {
+        return;
+      }
+      const found = target.closest(".ifb-verbchip");
+      if (!found || found.parentElement !== list) {
+        return;
+      }
+      const p = pointFrom(e);
+      chip = found;
+      originX = p ? p.x : 0;
+      moved = false;
+    };
+    const move = (e) => {
+      var _a;
+      if (!chip) {
+        return;
+      }
+      const p = pointFrom(e);
+      if (!p) {
+        return;
+      }
+      if (!moved && Math.abs(p.x - originX) < MIN_DRAG_PX) {
+        return;
+      }
+      if (!moved) {
+        moved = true;
+        chip.classList.add("ifb-dragging");
+      }
+      if (e.cancelable) {
+        e.preventDefault();
+      }
+      const bar = document.getElementById("ifb-bar");
+      if (bar) {
+        const r = bar.getBoundingClientRect();
+        if (p.y < r.top + 36) {
+          bar.scrollTop -= 12;
+        } else if (p.y > r.bottom - 36) {
+          bar.scrollTop += 12;
+        }
+      }
+      const under = (_a = document.elementFromPoint(p.x, p.y)) == null ? void 0 : _a.closest(".ifb-verbchip");
+      if (!under || under === chip || under.parentElement !== list) {
+        return;
+      }
+      const box = under.getBoundingClientRect();
+      list.insertBefore(chip, p.x > box.left + box.width / 2 ? under.nextSibling : under);
+    };
+    const end = () => {
+      var _a;
+      if (!chip) {
+        return;
+      }
+      const dropped = chip;
+      const wasDrag = moved;
+      chip = null;
+      moved = false;
+      if (!wasDrag) {
+        return;
+      }
+      dropped.classList.remove("ifb-dragging");
+      suppressNextChipClick = true;
+      const verb = dropped.getAttribute("data-verb");
+      const to = chipIndex(dropped);
+      if (verb !== null && to !== -1) {
+        selectedVerb = verb;
+        moveVerbFromUI(verb, to);
+        (_a = document.querySelector('#ifb-editor .ifb-verbchip[data-verb="' + verb + '"]')) == null ? void 0 : _a.focus();
+      }
+    };
+    if (typeof window.PointerEvent === "function") {
+      list.addEventListener("pointerdown", start);
+      list.addEventListener("pointermove", move);
+      list.addEventListener("pointerup", end);
+      list.addEventListener("pointercancel", end);
+    } else {
+      list.addEventListener("mousedown", start);
+      list.addEventListener("touchstart", start, { passive: false });
+      list.addEventListener("mousemove", move);
+      list.addEventListener("touchmove", move, { passive: false });
+      list.addEventListener("mouseup", end);
+      list.addEventListener("touchend", end);
+      list.addEventListener("touchcancel", end);
+    }
   }
   function renderEditor() {
     const panel = document.getElementById("ifb-editor");
@@ -489,14 +683,41 @@
     }));
     row.appendChild(button("Defaults", "ifb-resetverbs", () => resetVerbs()));
     panel.appendChild(row);
+    const actions = document.createElement("div");
+    actions.className = "ifb-editrow ifb-editactions";
+    actions.appendChild(button(
+      "\u25C0",
+      "ifb-moveleft",
+      () => {
+        moveSelected(-1);
+      },
+      "Move the selected word earlier"
+    ));
+    actions.appendChild(button(
+      "\u25B6",
+      "ifb-moveright",
+      () => {
+        moveSelected(1);
+      },
+      "Move the selected word later"
+    ));
+    actions.appendChild(button(
+      "Delete",
+      "ifb-deleteverb",
+      () => {
+        deleteSelected();
+      },
+      "Delete the selected word"
+    ));
+    panel.appendChild(actions);
     const list = document.createElement("div");
     list.className = "ifb-verblist";
     for (const v of loadVerbs()) {
-      const chip = button(v + "  \u2715", "ifb-verbchip", () => removeVerbFromUI(v));
-      chip.title = "Remove " + v;
-      list.appendChild(chip);
+      list.appendChild(verbChip(v));
     }
+    enableChipDragging(list);
     panel.appendChild(list);
+    renderSelection();
     measureBar();
   }
   function openEditor() {
@@ -729,6 +950,11 @@
     resetVerbs,
     addVerbFromUI,
     removeVerbFromUI,
+    moveVerbFromUI,
+    selectVerb,
+    selectedVerbName,
+    moveSelected,
+    deleteSelected,
     renderVerbs,
     openEditor,
     closeEditor,

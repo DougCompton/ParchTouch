@@ -155,3 +155,27 @@ export function removeVerb(list: readonly string[], verb: Loose): string[] {
   const v = normalizeVerb(verb)
   return list.filter(x => x !== v)
 }
+
+/**
+ * Move a word to a new position, returning a new list.
+ *
+ * Order is not cosmetic: the bar shows three rows and scrolls, so whichever words come first are the
+ * ones reachable without scrolling. This is what lets a player put their own favourites in reach.
+ *
+ * `toIndex` is clamped into range and counted AFTER the word is lifted out, which is what makes
+ * "move one place right" simply `from + 1`. An unknown word, or a move to where it already is, returns
+ * an unchanged copy.
+ */
+export function moveVerb(list: readonly string[], verb: Loose, toIndex: number): string[] {
+  const v = normalizeVerb(verb)
+  const out = list.slice()
+  const from = out.indexOf(v)
+  if (from === -1) { return out }
+  if (!Number.isFinite(toIndex)) { return out }
+
+  const to = Math.max(0, Math.min(out.length - 1, Math.trunc(toIndex)))
+  if (to === from) { return out }
+  out.splice(from, 1)
+  out.splice(to, 0, v)
+  return out
+}

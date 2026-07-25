@@ -44,6 +44,17 @@ dismisses a `-- more --` pager.
 **⚙** opens settings. It **replaces the buttons** rather than appearing beside them — the bar is capped
 at three button rows, so there is nowhere to add. Its **✕ Close** button gives the buttons back.
 
+In settings you can:
+
+- **Add** a word, or restore the shipped list with **Defaults**.
+- **Tap a word to select it**, then **◀** / **▶** to move it or **Delete** to remove it. Tapping only
+  selects — nothing is deleted without that second, deliberate press.
+- **Drag a word** to a new position, by mouse or by touch.
+- Without a pointer: focus a word and use **Alt+← / Alt+→** to move it, or **Delete** to remove it.
+
+Order is not cosmetic — the strip shows three rows and scrolls, so whichever words come first are the
+ones reachable without scrolling.
+
 **Word list** (middle) — one editable list holding both the no-object commands (`look`, `inventory`,
 `again`, `undo`, `save`, `restore`, …) and the verbs that take an object (`take`, `examine`, `open`, …).
 A tap **stages** text into the input box without sending it; press **↵** to send.

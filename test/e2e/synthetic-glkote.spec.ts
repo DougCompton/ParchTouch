@@ -517,6 +517,132 @@ test('adding a verb from the editor keeps it open and updates both lists', async
   await page.evaluate(() => window.IFButtons.resetVerbs())
 })
 
+async function openSettingsWith(page: import('@playwright/test').Page, words: string[]) {
+  await page.evaluate(w => {
+    window.IFButtons.saveVerbs(w)
+    window.IFButtons.renderVerbs()
+    window.IFButtons.openEditor()
+  }, words)
+  await expect(page.locator('#ifb-editor .ifb-verbchip')).toHaveCount(words.length)
+}
+
+const chipOrder = (page: import('@playwright/test').Page) =>
+  page.locator('#ifb-editor .ifb-verbchip').allTextContents()
+
+test('a word can be dragged to a new position with a mouse', async ({ page }) => {
+  await openSettingsWith(page, ['look', 'take', 'dig'])
+  const from = await page.locator('#ifb-editor .ifb-verbchip[data-verb="look"]').boundingBox()
+  const to = await page.locator('#ifb-editor .ifb-verbchip[data-verb="dig"]').boundingBox()
+  if (!from || !to) { throw new Error('chips not laid out') }
+
+  await page.mouse.move(from.x + from.width / 2, from.y + from.height / 2)
+  await page.mouse.down()
+  // Past the halfway point of the last chip, so it lands after it.
+  await page.mouse.move(to.x + to.width * 0.9, to.y + to.height / 2, { steps: 12 })
+  await page.mouse.up()
+
+  expect(await chipOrder(page)).toEqual(['take', 'dig', 'look'])
+  expect(await page.evaluate(() => window.IFButtons.loadVerbs())).toEqual(['take', 'dig', 'look'])
+  await page.evaluate(() => window.IFButtons.resetVerbs())
+})
+
+test('a drag does not also toggle the selection when it ends', async ({ page }) => {
+  // A drag finishes with a pointer-up on the chip, which the browser also reports as a click.
+  await openSettingsWith(page, ['look', 'take', 'dig'])
+  const from = await page.locator('#ifb-editor .ifb-verbchip[data-verb="look"]').boundingBox()
+  const to = await page.locator('#ifb-editor .ifb-verbchip[data-verb="take"]').boundingBox()
+  if (!from || !to) { throw new Error('chips not laid out') }
+  await page.mouse.move(from.x + from.width / 2, from.y + from.height / 2)
+  await page.mouse.down()
+  await page.mouse.move(to.x + to.width * 0.9, to.y + to.height / 2, { steps: 10 })
+  await page.mouse.up()
+  // The dragged word stays selected — it is not toggled off by the trailing click.
+  expect(await page.evaluate(() => window.IFButtons.selectedVerbName())).toBe('look')
+  await page.evaluate(() => window.IFButtons.resetVerbs())
+})
+
+test('a tap without movement selects rather than reordering', async ({ page }) => {
+  await openSettingsWith(page, ['look', 'take', 'dig'])
+  await page.locator('#ifb-editor .ifb-verbchip[data-verb="take"]').click()
+  expect(await page.evaluate(() => window.IFButtons.selectedVerbName())).toBe('take')
+  expect(await chipOrder(page)).toEqual(['look', 'take', 'dig'])
+  await page.evaluate(() => window.IFButtons.resetVerbs())
+})
+
+test('a word can be dragged by TOUCH, as on a tablet', async ({ page }) => {
+  await openSettingsWith(page, ['look', 'take', 'dig'])
+  /*
+   * A tablet does NOT deliver raw TouchEvents to this code. In any browser with Pointer Events — which
+   * is every current one — a finger produces pointerdown/move/up with pointerType 'touch', and that is
+   * the branch the addon registers. So drive exactly that. (The touch-event fallback in the source is
+   * only reachable on Safari 11.1-12, which predates Pointer Events and which Playwright cannot run.)
+   */
+  const ok = await page.evaluate(() => {
+    const grab = document.querySelector<HTMLElement>('#ifb-editor .ifb-verbchip[data-verb="look"]')
+    const target = document.querySelector<HTMLElement>('#ifb-editor .ifb-verbchip[data-verb="dig"]')
+    if (!grab || !target) { return 'missing elements' }
+    const at = (el: HTMLElement, fx: number) => {
+      const r = el.getBoundingClientRect()
+      return { clientX: r.left + r.width * fx, clientY: r.top + r.height / 2 }
+    }
+    const fire = (type: string, el: HTMLElement, p: { clientX: number; clientY: number }) => {
+      el.dispatchEvent(new PointerEvent(type, {
+        bubbles: true, cancelable: true, pointerId: 1, pointerType: 'touch', isPrimary: true, ...p,
+      }))
+    }
+    fire('pointerdown', grab, at(grab, 0.5))
+    fire('pointermove', grab, at(target, 0.9))
+    fire('pointerup', grab, at(target, 0.9))
+    return 'ok'
+  })
+  expect(ok).toBe('ok')
+  expect(await chipOrder(page)).toEqual(['take', 'dig', 'look'])
+  expect(await page.evaluate(() => window.IFButtons.loadVerbs())).toEqual(['take', 'dig', 'look'])
+  await page.evaluate(() => window.IFButtons.resetVerbs())
+})
+
+test('touch-action is none on a word, so a touch drag is not stolen by scrolling', async ({ page }) => {
+  await openSettingsWith(page, ['look', 'take'])
+  const ta = await page.evaluate(() =>
+    getComputedStyle(document.querySelector('#ifb-editor .ifb-verbchip')!).touchAction)
+  expect(ta).toBe('none')
+  await page.evaluate(() => window.IFButtons.resetVerbs())
+})
+
+test('the move buttons reorder the selected word', async ({ page }) => {
+  await openSettingsWith(page, ['look', 'take', 'dig'])
+  await page.locator('#ifb-editor .ifb-verbchip[data-verb="dig"]').click()
+  await page.locator('#ifb-editor .ifb-moveleft').click()
+  expect(await chipOrder(page)).toEqual(['look', 'dig', 'take'])
+  await page.locator('#ifb-editor .ifb-moveleft').click()
+  expect(await chipOrder(page)).toEqual(['dig', 'look', 'take'])
+  await page.evaluate(() => window.IFButtons.resetVerbs())
+})
+
+test('the actions are disabled until a word is selected', async ({ page }) => {
+  await openSettingsWith(page, ['look', 'take'])
+  for (const c of ['ifb-moveleft', 'ifb-moveright', 'ifb-deleteverb']) {
+    await expect(page.locator('#ifb-editor .' + c)).toBeDisabled()
+  }
+  await page.locator('#ifb-editor .ifb-verbchip[data-verb="take"]').click()
+  for (const c of ['ifb-moveleft', 'ifb-moveright', 'ifb-deleteverb']) {
+    await expect(page.locator('#ifb-editor .' + c)).toBeEnabled()
+  }
+  await page.evaluate(() => window.IFButtons.resetVerbs())
+})
+
+test('reordering changes which words are reachable without scrolling', async ({ page }) => {
+  // The point of reordering: the strip shows three rows and scrolls, so order decides what is in reach.
+  await openSettingsWith(page, ['look', 'take', 'dig'])
+  await page.locator('#ifb-editor .ifb-verbchip[data-verb="dig"]').click()
+  await page.locator('#ifb-editor .ifb-moveleft').click()
+  await page.locator('#ifb-editor .ifb-moveleft').click()
+  await page.locator('#ifb-editor .ifb-closeeditor').click()
+  expect((await page.locator('#ifb-bar .ifb-verb').allTextContents()).map(v => v.toLowerCase()))
+    .toEqual(['dig', 'look', 'take'])
+  await page.evaluate(() => window.IFButtons.resetVerbs())
+})
+
 test('the page raised no uncaught errors', async ({ page }) => {
   await tapControl(page, 'ifb-move', 'N')
   await tapVerb(page, 'Take')
