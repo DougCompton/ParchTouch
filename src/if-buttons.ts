@@ -566,7 +566,9 @@ export function renderVerbs(): void {
   if (!host) { return }
   while (host.firstChild) { host.removeChild(host.firstChild) }
   for (const v of loadVerbs()) {
-    const label = v.charAt(0).toUpperCase() + v.slice(1)
+    // A host command like `/note` is shown verbatim: capitalising it would only uppercase the slash,
+    // and these read as literal commands rather than English words.
+    const label = v.startsWith('/') ? v : v.charAt(0).toUpperCase() + v.slice(1)
     host.appendChild(button(label, 'ifb-verb', btn => apply(tapVerb(state, v), btn, 'stage')))
   }
   measureBar()          // a different number of verbs is a different bar height
@@ -736,23 +738,20 @@ function renderEditor(): void {
     input.value = ''
   }))
   row.appendChild(button('Defaults', 'ifb-resetverbs', () => resetVerbs()))
-  panel.appendChild(row)
 
   /*
-   * Actions on the SELECTED word, kept separate from the words themselves. Tapping a word used to
-   * delete it on the spot, which is unforgiving on a touch screen and made that same surface
-   * impossible to drag — a drag ends in a tap. Now a tap only selects, and reordering or deleting is a
-   * deliberate second press. They stay disabled until there is something to act on.
+   * Actions on the SELECTED word, sharing the top row. Kept separate from the words themselves because
+   * tapping a word used to delete it on the spot — unforgiving on a touch screen, and it made that same
+   * surface impossible to drag, since a drag ends in a tap. A tap now only selects; reordering or
+   * deleting is a deliberate second press, and both stay disabled until there is something to act on.
    */
-  const actions = document.createElement('div')
-  actions.className = 'ifb-editrow ifb-editactions'
-  actions.appendChild(button('◀', 'ifb-moveleft', () => { moveSelected(-1) },
+  row.appendChild(button('◀', 'ifb-moveleft', () => { moveSelected(-1) },
     'Move the selected word earlier'))
-  actions.appendChild(button('▶', 'ifb-moveright', () => { moveSelected(1) },
+  row.appendChild(button('▶', 'ifb-moveright', () => { moveSelected(1) },
     'Move the selected word later'))
-  actions.appendChild(button('Delete', 'ifb-deleteverb', () => { deleteSelected() },
+  row.appendChild(button('Delete', 'ifb-deleteverb', () => { deleteSelected() },
     'Delete the selected word'))
-  panel.appendChild(actions)
+  panel.appendChild(row)
 
   const list = document.createElement('div')
   list.className = 'ifb-verblist'

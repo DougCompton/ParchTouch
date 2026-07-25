@@ -79,9 +79,22 @@ export function normalizeVerb(verb: Loose): string {
   let s = str(verb).trim().toLowerCase()
   if (!s) { return '' }
   s = s.replace(/\s+/g, ' ')
+
+  /*
+   * A LEADING SLASH IS MEANINGFUL and is kept. Some hosts reserve `/name` for their own features —
+   * notes, goto, route-finding — and stripping it silently turned `/note` into `note`, which the game
+   * then rejected as an unknown verb. Exactly one slash survives, and only at the front: everything
+   * after it is normalized as usual, so `/note!!` is still `/note` and a bare `/` is still nothing.
+   *
+   * Deliberately NOT extended to normalizeWord(). A word tapped out of story text must never be able
+   * to acquire a leading slash and address a host command.
+   */
+  const slash = s.startsWith('/') ? '/' : ''
+  s = s.slice(slash.length)
+
   s = s.replace(/[^\p{L}\p{N} -]/gu, '')
   s = s.replace(/^[\s-]+|[\s-]+$/g, '')
-  return s
+  return s === '' ? '' : slash + s
 }
 
 /**

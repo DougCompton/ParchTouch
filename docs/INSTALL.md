@@ -55,6 +55,20 @@ In settings you can:
 Order is not cosmetic — the strip shows three rows and scrolls, so whichever words come first are the
 ones reachable without scrolling.
 
+### Host commands starting with `/`
+
+Some hosts reserve `/name` for their own features — Parchmap uses `/map`, `/help`, `/notes`, `/theme`,
+`/goto`, `/see`, `/note`, `/room-notes`, `/clear`, `/quit`. You can add these as buttons like any other
+word, and the leading slash is preserved.
+
+**Do not press ↵ for them.** Such a host detects its own commands by watching the input box, so tapping
+the button is the whole interaction — the host picks it up within a fraction of a second and clears the
+box itself. Pressing ↵ hands the text to the *game* instead, which will just say it does not recognise
+the verb.
+
+A few of Parchmap's commands take an argument terminated by a semicolon (`/goto kitchen;`), which you
+can finish by tapping a word and then typing the `;` — or add the whole thing as its own button.
+
 **Word list** (middle) — one editable list holding both the no-object commands (`look`, `inventory`,
 `again`, `undo`, `save`, `restore`, …) and the verbs that take an object (`take`, `examine`, `open`, …).
 A tap **stages** text into the input box without sending it; press **↵** to send.

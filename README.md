@@ -292,6 +292,9 @@ SW   S   SE   ⚙
   **◀ ▶** to reorder or **Delete** to remove it. You can also just **drag a word** to a new position,
   by mouse or by touch. Order matters: the strip shows three rows and scrolls, so the words you put
   first are the ones you can reach without scrolling.
+- Words may start with **`/`**, so a host's own commands (`/map`, `/notes`, …) work as buttons too.
+  Those are claimed by the host rather than the game, so just tap them — **no ↵**. See
+  [docs/INSTALL.md](docs/INSTALL.md).
 
 **The word list** (middle) — one editable list of everything else: `look`, `inventory`, `take`,
 `examine`, `again`, `undo`, `save` and so on. Tapping one **stages** text into the input box and sends

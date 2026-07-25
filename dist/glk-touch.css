@@ -192,18 +192,40 @@
  */
 #ifb-editor { display: none; flex: 0 0 auto; padding: 0; }
 #ifb-bar.ifb-editing .ifb-row { display: none; }
-#ifb-bar.ifb-editing #ifb-editor { display: block; }
-.ifb-editrow { display: flex; gap: 6px; flex-wrap: wrap; margin-bottom: 8px; }
+/* Column with the same gap as everything else, so the editor's rows line up with the button rows. */
+#ifb-bar.ifb-editing #ifb-editor { display: flex; flex-direction: column; gap: var(--ifb-gap); }
+
+/* Exactly one button tall, like every other row in the bar. */
+.ifb-editrow {
+  display: flex;
+  gap: var(--ifb-gap);
+  flex-wrap: nowrap;
+  align-items: center;
+  min-height: var(--ifb-btn-h);
+}
+
+/*
+ * The text box shares the row with six controls, so it gives up width rather than pushing them onto a
+ * second line: it shrinks to a floor and no more. Sized to exactly --ifb-btn-h with border-box so the
+ * row is the same height as a row of buttons — a taller input was what made this row stand out.
+ */
 .ifb-newverb {
-  flex: 1 1 160px;
-  min-height: 44px;
-  padding: 6px 10px;
+  flex: 1 1 90px;
+  min-width: 64px;
+  box-sizing: border-box;
+  height: var(--ifb-btn-h);
+  padding: 0 8px;
   font-size: 16px;                 /* >=16px stops iOS zooming the page on focus */
   border: 1px solid var(--ifb-border);
   border-radius: 8px;
   background: #1e1e1e;
   color: var(--ifb-text);
 }
+
+/* Narrow, single-purpose controls: let the text box keep as much of the row as possible. */
+.ifb-editrow .ifb { flex: 0 0 auto; }
+.ifb-closeeditor, .ifb-addverb, .ifb-resetverbs, .ifb-deleteverb { min-width: 0; padding: 6px 8px; }
+.ifb-moveleft, .ifb-moveright { min-width: 40px; padding: 6px 4px; }
 .ifb-verblist { display: flex; gap: 6px; flex-wrap: wrap; }
 
 /*
@@ -223,7 +245,7 @@
 .ifb-verbchip.ifb-dragging { cursor: grabbing; opacity: .65; border-color: var(--ifb-armed-border); }
 
 /* Actions on the selected word; plainly unavailable until something is selected. */
-.ifb-editactions .ifb[disabled] { opacity: .4; cursor: default; }
+.ifb-editrow .ifb[disabled] { opacity: .4; cursor: default; }
 .ifb-moveleft, .ifb-moveright { font-size: 17px; }
 /* Close is the only exit from the editor, so make it read as the primary control. */
 .ifb-closeeditor { font-weight: 600; }

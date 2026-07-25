@@ -667,6 +667,56 @@ describe('settings editor', () => {
   })
 })
 
+describe('host commands beginning with a slash', () => {
+  let glue: Glue
+  beforeEach(async () => {
+    localStorage.clear()
+    glue = await loadGlue()
+  })
+
+  it('can be added through the editor and survives a reload', async () => {
+    glue.saveVerbs(['take'])
+    glue.buildBar()
+    glue.addVerbFromUI('/note')
+    expect(glue.loadVerbs()).toEqual(['take', '/note'])
+    const again = await loadGlue()
+    expect(again.loadVerbs()).toEqual(['take', '/note'])
+  })
+
+  it('renders its button label verbatim, slash and all', () => {
+    glue.saveVerbs(['/note', 'take'])
+    glue.buildBar()
+    expect([...document.querySelectorAll('#ifb-bar .ifb-verb')].map(b => b.textContent))
+      .toEqual(['/note', 'Take'])
+  })
+
+  it('stages the slash command into the field, ready for the return key', () => {
+    makeBuffer(['x'], { withInput: true })
+    glue.saveVerbs(['/note'])
+    glue.buildBar()
+    document.querySelector<HTMLButtonElement>('#ifb-bar .ifb-verb')?.click()
+    expect(liveInput().value).toBe('/note')
+  })
+
+  it('pairs a slash command with a tapped story word', () => {
+    const bw = makeBuffer(['the Kitchen door'], { withInput: true })
+    glue.saveVerbs(['/goto'])
+    glue.decorateBuffer(bw)
+    glue.buildBar()
+    document.querySelector<HTMLButtonElement>('#ifb-bar .ifb-verb')?.click()
+    ;[...bw.querySelectorAll<HTMLElement>('.ifb-word')].find(n => n.textContent === 'Kitchen')?.click()
+    expect(liveInput().value).toBe('/goto kitchen')
+  })
+
+  it('is never produced by tapping a story word', () => {
+    const bw = makeBuffer(['a /note here'], { withInput: true })
+    glue.decorateBuffer(bw)
+    glue.buildBar()
+    const words = [...bw.querySelectorAll<HTMLElement>('.ifb-word')].map(n => n.textContent)
+    expect(words).not.toContain('/note')      // the slash is punctuation, not part of the word
+  })
+})
+
 describe('settings: select, move, delete', () => {
   let glue: Glue
   beforeEach(async () => {

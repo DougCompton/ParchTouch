@@ -178,6 +178,34 @@ test.describe('real Parchmap (legacy core + auto-map)', () => {
     }
   })
 
+  test("the host's own /commands work as buttons, with no return key", async ({ page }) => {
+    /*
+     * This host reserves `/name` for its own features. Two things had to be true for those to work as
+     * buttons: normalizeVerb must KEEP the leading slash (it used to strip it, turning /map into map),
+     * and the command must not be sent to the interpreter — this host detects them by POLLING its input
+     * field every 200ms, then handles the command and clears the field itself.
+     *
+     * So staging alone is the whole interaction. Pressing the return key would hand the text to the
+     * game instead, which answers "That's not a verb I recognise".
+     */
+    await page.evaluate(() => {
+      window.IFButtons.saveVerbs(['/map', 'look'])
+      window.IFButtons.renderVerbs()
+    })
+    await expect(page.locator('#ifb-bar .ifb-verb').filter({ hasText: '/map' })).toHaveCount(1)
+
+    const before = await echoedViaLocators(page)
+    await page.locator('#ifb-bar .ifb-verb').filter({ hasText: '/map' }).click()
+    // Staged with the slash intact...
+    await expect(page.locator('.Input.LineInput')).toHaveValue('/map')
+
+    // ...then the host claims it: it clears its own field, and the game never sees the text.
+    await expect(page.locator('.Input.LineInput')).toHaveValue('', { timeout: 5000 })
+    expect(await echoedViaLocators(page)).toEqual(before)
+
+    await page.evaluate(() => window.IFButtons.resetVerbs())
+  })
+
   test('the map toggle collapses and restores the map (P6-AC4)', async ({ page }) => {
     const toggle = page.locator('#ifb-bar .ifb-maptoggle')
     await expect(page.locator('#map')).toBeVisible()

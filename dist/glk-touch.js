@@ -53,9 +53,11 @@
       return "";
     }
     s = s.replace(/\s+/g, " ");
+    const slash = s.startsWith("/") ? "/" : "";
+    s = s.slice(slash.length);
     s = s.replace(/[^\p{L}\p{N} -]/gu, "");
     s = s.replace(/^[\s-]+|[\s-]+$/g, "");
-    return s;
+    return s === "" ? "" : slash + s;
   }
   function tokenize(text) {
     const s = str(text);
@@ -525,7 +527,7 @@
       host.removeChild(host.firstChild);
     }
     for (const v of loadVerbs()) {
-      const label = v.charAt(0).toUpperCase() + v.slice(1);
+      const label = v.startsWith("/") ? v : v.charAt(0).toUpperCase() + v.slice(1);
       host.appendChild(button(label, "ifb-verb", (btn) => apply(tapVerb(state, v), btn, "stage")));
     }
     measureBar();
@@ -682,10 +684,7 @@
       input.value = "";
     }));
     row.appendChild(button("Defaults", "ifb-resetverbs", () => resetVerbs()));
-    panel.appendChild(row);
-    const actions = document.createElement("div");
-    actions.className = "ifb-editrow ifb-editactions";
-    actions.appendChild(button(
+    row.appendChild(button(
       "\u25C0",
       "ifb-moveleft",
       () => {
@@ -693,7 +692,7 @@
       },
       "Move the selected word earlier"
     ));
-    actions.appendChild(button(
+    row.appendChild(button(
       "\u25B6",
       "ifb-moveright",
       () => {
@@ -701,7 +700,7 @@
       },
       "Move the selected word later"
     ));
-    actions.appendChild(button(
+    row.appendChild(button(
       "Delete",
       "ifb-deleteverb",
       () => {
@@ -709,7 +708,7 @@
       },
       "Delete the selected word"
     ));
-    panel.appendChild(actions);
+    panel.appendChild(row);
     const list = document.createElement("div");
     list.className = "ifb-verblist";
     for (const v of loadVerbs()) {

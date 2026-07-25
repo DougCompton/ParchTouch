@@ -212,6 +212,58 @@ describe('command state machine', () => {
   })
 })
 
+describe('host commands beginning with a slash', () => {
+  // Some hosts reserve /name for their own features (notes, goto, route-finding). Stripping the slash
+  // silently turned /note into note, which the game then rejected as an unknown verb.
+  it('keeps a leading slash on a verb', () => {
+    expect(normalizeVerb('/note')).toBe('/note')
+    expect(normalizeVerb('/goto')).toBe('/goto')
+    expect(normalizeVerb('/room-notes')).toBe('/room-notes')
+  })
+
+  it('still normalizes everything after the slash', () => {
+    expect(normalizeVerb('  /NOTE!!  ')).toBe('/note')
+    expect(normalizeVerb('/see   me')).toBe('/see me')
+    expect(normalizeVerb('/note\nx')).toBe('/note x')
+  })
+
+  it('keeps only one slash, and only at the front', () => {
+    expect(normalizeVerb('//note')).toBe('/note')
+    expect(normalizeVerb('no/te')).toBe('note')       // an inner slash is still punctuation
+  })
+
+  it('a bare slash is still nothing', () => {
+    expect(normalizeVerb('/')).toBe('')
+    expect(normalizeVerb('///')).toBe('')
+    expect(normalizeVerb('/!!')).toBe('')
+  })
+
+  it('a slash command can be added to the list and removed again', () => {
+    expect(addVerb(['take'], '/note')).toEqual(['take', '/note'])
+    expect(removeVerb(['take', '/note'], '/note')).toEqual(['take'])
+    expect(addVerb(['/note'], '/NOTE')).toEqual(['/note'])   // still de-duplicated
+  })
+
+  it('a slash command can be reordered like any other word', () => {
+    expect(moveVerb(['take', '/note'], '/note', 0)).toEqual(['/note', 'take'])
+  })
+
+  it('a slash command pairs with a tapped noun', () => {
+    expect(tapWord(tapVerb(createState(), '/goto').state, 'Kitchen').command).toBe('/goto kitchen')
+  })
+
+  it('a TAPPED WORD can never acquire a leading slash', () => {
+    // Story text must not be able to address a host command.
+    expect(normalizeWord('/note')).toBe('note')
+    expect(normalizeWord('/')).toBe('')
+  })
+
+  it('a slash command still obeys the length and count limits', () => {
+    expect(addVerb([], '/' + 'a'.repeat(200))).toEqual([])
+    expect(normalizeVerb('/' + 'a'.repeat(5))).toBe('/aaaaa')
+  })
+})
+
 describe('moveVerb', () => {
   it('moves a verb one place later', () => {
     expect(moveVerb(['a', 'b', 'c'], 'a', 1)).toEqual(['b', 'a', 'c'])

@@ -479,28 +479,32 @@ test('the settings editor replaces the buttons, and Close brings them back', asy
 })
 
 test('the editor honours the three-row cap and scrolls instead of growing', async ({ page }) => {
-  await page.setViewportSize({ width: 820, height: 1100 })
-  const capped = await page.evaluate(() => {
-    const cs = getComputedStyle(document.documentElement)
-    const rows = Number.parseFloat(cs.getPropertyValue('--ifb-rows'))
-    const btn = Number.parseFloat(cs.getPropertyValue('--ifb-btn-h'))
-    const gap = Number.parseFloat(cs.getPropertyValue('--ifb-gap'))
-    return rows * btn + (rows - 1) * gap + 16
+  await page.setViewportSize({ width: 600, height: 1100 })
+  // A deterministic list that cannot fit: the default 23 words DO fit in three rows now that the chips
+  // carry only the word, so relying on the defaults would make this assertion depend on chip width.
+  await page.evaluate(() => {
+    window.IFButtons.saveVerbs(Array.from({ length: 40 }, (_, i) => 'word' + i))
+    window.IFButtons.renderVerbs()
+    window.IFButtons.openEditor()
   })
-  await page.locator('#ifb-bar .ifb-editverbs').click()
+  await page.waitForTimeout(200)
   const m = await page.evaluate(() => {
+    const cs = getComputedStyle(document.documentElement)
+    const capped = Number.parseFloat(cs.getPropertyValue('--ifb-rows')) * Number.parseFloat(cs.getPropertyValue('--ifb-btn-h'))
+      + (Number.parseFloat(cs.getPropertyValue('--ifb-rows')) - 1) * Number.parseFloat(cs.getPropertyValue('--ifb-gap')) + 16
     const bar = document.getElementById('ifb-bar')!
     return {
+      capped,
       h: Math.round(bar.getBoundingClientRect().height),
       scroll: bar.scrollHeight,
-      reserved: Number.parseFloat(getComputedStyle(document.documentElement)
-        .getPropertyValue('--ifb-bar-height')),
+      reserved: Number.parseFloat(cs.getPropertyValue('--ifb-bar-height')),
     }
   })
-  expect(m.h).toBeLessThanOrEqual(capped + 1)
+  expect(m.h).toBeLessThanOrEqual(m.capped + 1)
   expect(m.reserved).toBe(m.h)           // the reservation follows the editor too
-  expect(m.scroll).toBeGreaterThan(m.h)  // one chip per verb needs more than three rows
+  expect(m.scroll).toBeGreaterThan(m.h)  // the overflow scrolls rather than growing the bar
   await page.locator('#ifb-editor .ifb-closeeditor').click()
+  await page.evaluate(() => window.IFButtons.resetVerbs())
 })
 
 test('adding a verb from the editor keeps it open and updates both lists', async ({ page }) => {
@@ -640,6 +644,46 @@ test('reordering changes which words are reachable without scrolling', async ({ 
   await page.locator('#ifb-editor .ifb-closeeditor').click()
   expect((await page.locator('#ifb-bar .ifb-verb').allTextContents()).map(v => v.toLowerCase()))
     .toEqual(['dig', 'look', 'take'])
+  await page.evaluate(() => window.IFButtons.resetVerbs())
+})
+
+test('the settings top row is one button tall and holds every control on one line', async ({ page }) => {
+  await openSettingsWith(page, ['look', 'take', 'dig'])
+  for (const width of [820, 600]) {
+    await page.setViewportSize({ width, height: 1100 })
+    await page.waitForTimeout(150)
+    const m = await page.evaluate(() => {
+      const px = (v: string) => Number.parseFloat(getComputedStyle(document.documentElement).getPropertyValue(v))
+      const row = document.querySelector<HTMLElement>('#ifb-editor .ifb-editrow')!
+      const kids = [...row.children] as HTMLElement[]
+      return {
+        btnH: px('--ifb-btn-h'),
+        rowH: Math.round(row.getBoundingClientRect().height),
+        chipH: Math.round(document.querySelector('#ifb-editor .ifb-verbchip')!.getBoundingClientRect().height),
+        inputH: Math.round(document.querySelector('#ifb-editor .ifb-newverb')!.getBoundingClientRect().height),
+        inputW: Math.round(document.querySelector('#ifb-editor .ifb-newverb')!.getBoundingClientRect().width),
+        lines: new Set(kids.map(k => Math.round(k.getBoundingClientRect().top))).size,
+        controls: kids.length,
+      }
+    })
+    // One button tall, same as a chip row — the input used to make this row stand out.
+    expect(m.rowH).toBe(m.btnH)
+    expect(m.chipH).toBe(m.btnH)
+    expect(m.inputH).toBe(m.btnH)
+    // Close, the text box, Add, Defaults, and the three actions.
+    expect(m.controls).toBe(7)
+    expect(m.lines).toBe(1)          // the text box gives up width rather than wrapping the row
+    expect(m.inputW).toBeGreaterThan(40)
+  }
+  await page.setViewportSize({ width: 1280, height: 720 })
+  await page.evaluate(() => window.IFButtons.resetVerbs())
+})
+
+test('the move and delete actions live in that top row', async ({ page }) => {
+  await openSettingsWith(page, ['look', 'take'])
+  for (const c of ['ifb-moveleft', 'ifb-moveright', 'ifb-deleteverb']) {
+    await expect(page.locator('#ifb-editor .ifb-editrow > .' + c)).toHaveCount(1)
+  }
   await page.evaluate(() => window.IFButtons.resetVerbs())
 })
 
