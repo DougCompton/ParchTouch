@@ -7,14 +7,18 @@
 
 <!--
   The picker. Neither bundled player has a library browser for a mounted volume, so this is it.
-  It reads the library live from nginx's JSON directory index, which means a game dropped into the
-  volume appears on reload with no container restart.
+  It reads the library live, so a game dropped into the volume appears on reload with no restart.
 
   It also hides the difference between the two players, which is otherwise a trap:
     Parchment  needs a PATH, not a bare filename — a bare one crashes its loading pane
-    Parchmap   needs the JS-wrapped copy the entrypoint writes, at games/<name>.js
-  Z-machine only for Parchmap: its bundled core loads zcode, so a Glulx or TADS game is
-  Parchment-only and says so, rather than offering a link that would fail.
+    Parchmap   needs a JS-wrapped copy of the story, at games/<name>.js
+  Which players can take a given story comes from /library.json, NOT from guessing here: only the
+  server can read the file, and only the file can say whether a .blb or .blorb container holds a
+  Z-machine game (Parchmap can play it) or a Glulx one (it cannot). Requesting that manifest is also
+  what wraps a newly added story, so the Parchmap link cannot point at a file that does not exist yet.
+
+  If the helper is unreachable the page falls back to nginx's JSON directory index and classifies by
+  extension, which is how it behaved before: fewer guarantees, still a usable library.
 -->
 <style>
   :root { color-scheme: dark light; --bg:#141414; --fg:#eee; --dim:#9a9a9a; --line:#333; --accent:#4c9be8; }
@@ -82,8 +86,8 @@
 
   <footer>
     <p>
-      Tap a compass direction to move. Tap a word in the story text, then a verb — or the other way
-      round — and press <b>↵</b> to send it. <b>⚙</b> edits the word list.
+      Tap a compass direction to move. Build anything else by tapping words in order — a verb, then a
+      word in the story text — and press <b>↵</b> to send it. <b>⚙</b> edits the word list.
     </p>
     <p id="licences"></p>
   </footer>
@@ -91,7 +95,7 @@
 
 <script>
 (function () {
-  var ZCODE = ['.z1','.z2','.z3','.z4','.z5','.z6','.z7','.z8','.zblorb','.zlb','.blb']
+  var ZCODE = ['.z1','.z2','.z3','.z4','.z5','.z6','.z7','.z8','.zblorb','.zlb']
   var out = document.getElementById('out')
   var sub = document.getElementById('sub')
 
@@ -116,8 +120,8 @@
     return a
   }
 
-  function render(names, hasParchmap) {
-    if (names.length === 0) {
+  function render(entries, hasParchmap) {
+    if (entries.length === 0) {
       out.innerHTML = ''
       var e = document.createElement('div')
       e.className = 'empty'
@@ -129,13 +133,14 @@
     }
 
     var ul = document.createElement('ul')
-    names.forEach(function (name) {
+    entries.forEach(function (entry) {
+      var name = entry.name
       var li = document.createElement('li')
 
       var n = document.createElement('span')
       n.className = 'name'
       var b = document.createElement('b')
-      b.textContent = title(name)              // textContent: a filename is untrusted
+      b.textContent = entry.title || title(name)   // textContent: a filename is untrusted
       var f = document.createElement('span')
       f.className = 'file'
       f.textContent = name
@@ -145,8 +150,8 @@
       // Parchment plays everything it has an engine for, and needs a PATH not a bare filename.
       li.appendChild(link('parchment/play.html?story=../stories/' + encodeURIComponent(name), 'Parchment'))
 
-      if (hasParchmap && isZcode(name)) {
-        // The entrypoint wrote the wrapped copy this points at.
+      if (entry.players.indexOf('parchmap') !== -1) {
+        // Requesting the manifest wrapped this, so the link resolves even for a story added a moment ago.
         li.appendChild(link('parchmap/play.html?story=games/' + encodeURIComponent(name) + '.js', 'Parchmap + map'))
       } else if (hasParchmap) {
         var only = document.createElement('span')
@@ -159,7 +164,7 @@
     })
     out.innerHTML = ''
     out.appendChild(ul)
-    sub.textContent = names.length + (names.length === 1 ? ' game' : ' games')
+    sub.textContent = entries.length + (entries.length === 1 ? ' game' : ' games')
       + ' — reload this page after adding more.'
   }
 
@@ -206,22 +211,55 @@
     'Both open in Parchment, with the touch bar. Parchmap cannot take a URL or an upload — it loads a '
     + 'wrapped copy from the library instead. Free stories: ifarchive.org'
 
-  Promise.all([
-    fetch('stories/', { headers: { Accept: 'application/json' } }).then(function (r) {
-      if (!r.ok) { throw new Error('HTTP ' + r.status) }
-      return r.json()
-    }),
-    probeParchmap(),
-  ]).then(function (res) {
-    var names = res[0].map(function (e) { return e.name })
-      .filter(function (n) { return n && n.charAt(0) !== '.' })
-      .sort(function (a, b) { return a.localeCompare(b) })
-    render(names, res[1])
-    document.getElementById('licences').innerHTML = res[1]
+  function licences(hasParchmap) {
+    document.getElementById('licences').innerHTML = hasParchmap
       ? 'glk-touch and Parchment are MIT; Parchmap is GPL-3.0, so this image as a whole is conveyed '
         + 'under GPL-3.0. Licences are in <code>/licences</code> in the container.'
       : 'glk-touch and Parchment are both MIT. Licences are in <code>/licences</code> in the container.'
-  }).catch(function (err) { fail(err.message || String(err)) })
+  }
+
+  // The manifest: authoritative about which player can take each story, and requesting it is what
+  // brings Parchmap's wrapped copies and its own menu into step with the volume.
+  function fromManifest() {
+    return fetch('library.json', { headers: { Accept: 'application/json' } }).then(function (r) {
+      if (!r.ok) { throw new Error('HTTP ' + r.status) }
+      return r.json()
+    }).then(function (lib) {
+      render(lib.stories || [], !!lib.parchmap)
+      licences(!!lib.parchmap)
+    })
+  }
+
+  // Fallback for an image whose helper is not running: nginx's directory index, classified by
+  // extension. A .blb or .blorb is a container that may hold either format, so it is offered to
+  // Parchment alone rather than risking a Parchmap link that loads and then fails.
+  function fromDirectoryIndex() {
+    return Promise.all([
+      fetch('stories/', { headers: { Accept: 'application/json' } }).then(function (r) {
+        if (!r.ok) { throw new Error('HTTP ' + r.status) }
+        return r.json()
+      }),
+      probeParchmap(),
+    ]).then(function (res) {
+      var hasParchmap = res[1]
+      var entries = res[0].map(function (e) { return e.name })
+        .filter(function (n) { return n && n.charAt(0) !== '.' })
+        .sort(function (a, b) { return a.localeCompare(b) })
+        .map(function (name) {
+          return {
+            name: name,
+            title: title(name),
+            players: hasParchmap && isZcode(name) ? ['parchment', 'parchmap'] : ['parchment'],
+          }
+        })
+      render(entries, hasParchmap)
+      licences(hasParchmap)
+    })
+  }
+
+  fromManifest()
+    .catch(fromDirectoryIndex)
+    .catch(function (err) { fail(err.message || String(err)) })
 })()
 </script>
 </body>

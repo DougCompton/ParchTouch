@@ -173,6 +173,20 @@ Things that bit and must not be undone:
   a Dockerfile that would not parse.
 - `docker/prepare.mjs` wraps Z-machine stories for Parchmap and regenerates its `GameList.js` by
   APPENDING to a pristine `GameList.bundled.js` copy, so no parsing of upstream JS is involved.
+- **Wrapping is ON DEMAND, and that is a bug fix, not a refinement.** It used to run only from the
+  entrypoint, so a story added to the share after boot had a working Parchment link (nginx serves the
+  raw file) and a 404 Parchmap link — for precisely the games a user just added. `docker/library.mjs` is
+  a loopback-only node helper that rescans per request; nginx serves `/library.json` from it and falls
+  back to it for `/parchmap/games/` MISSES via `try_files`. The `^~` on that location is load-bearing:
+  without it the regex cache location wins and the fallback never runs. `GameList.js` and `games/*.js`
+  are generated, so they must NOT be swept into the `immutable` cache rule.
+- **Story format is sniffed, never inferred from the extension.** `.blb`/`.blorb` are Blorb containers
+  holding either a Z-machine or a Glulx game; `.blb` was in the zcode list, so a Glulx game got a
+  Parchmap link that loaded and then failed inside the interpreter. `storyKind()` walks the Blorb chunks
+  for `ZCOD`/`GLUL`. The picker cannot do this itself — a browser cannot read the bytes — which is why
+  it now takes the classification from `/library.json` instead of guessing.
+- `ensureWrapped()` matches the requested name against the scanned library rather than joining it onto
+  a path. That is what makes traversal impossible; do not "simplify" it to a `join()`.
 - The image build is deliberately NOT in `scripts/ci.sh`: it needs network and takes minutes.
 
 ## Local harness (real-host verification)

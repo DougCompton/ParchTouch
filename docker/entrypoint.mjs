@@ -12,12 +12,21 @@
  */
 import { spawn } from 'node:child_process'
 import { prepare } from './prepare.mjs'
+import { startLibraryServer } from './library.mjs'
 
 try {
   prepare()
 } catch (err) {
   console.warn('[glk-touch] library preparation failed, serving anyway: ' + (err?.message ?? err))
 }
+
+/*
+ * The startup pass above only covers the volume AS IT IS NOW. This keeps it live: the helper rescans
+ * per request, so a story added to the share later is wrapped for Parchmap the moment the picker lists
+ * it, rather than 404ing until the next restart. It binds loopback only, and a failure to start is not
+ * fatal — see library.mjs.
+ */
+startLibraryServer()
 
 const argv = process.argv.slice(2)
 const cmd = argv.length > 0 ? argv : ['nginx', '-g', 'daemon off;']

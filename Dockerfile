@@ -118,6 +118,7 @@ COPY docker/index.html      ./index.html
 COPY docker/nginx.conf      /etc/nginx/conf.d/default.conf
 COPY docker/entrypoint.mjs  /opt/glk-touch/entrypoint.mjs
 COPY docker/prepare.mjs     /opt/glk-touch/prepare.mjs
+COPY docker/library.mjs     /opt/glk-touch/library.mjs
 
 # Every upstream licence travels with the code, which is what both MIT and GPL require.
 COPY LICENSE /licences/glk-touch.LICENSE

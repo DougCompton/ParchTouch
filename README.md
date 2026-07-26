@@ -322,14 +322,20 @@ STORIES=/srv/if-stories docker compose up -d --build
 
 Drop **raw, unconverted** story files into the directory you mount — `advent.z5`, `zork1.z5`,
 `Trinity.z4`, a `.zblorb`, a Glulx `.ulx`. The container reconciles the two players' disagreement about
-the same game for you: at start-up it wraps every Z-machine story into the `processBase64Zcode` form
-Parchmap's legacy core requires, and **injects your library into Parchmap's own game menu** beside the
-games it ships with. The volume is only ever read from, so mount it `:ro`.
+the same game for you: it wraps every Z-machine story into the `processBase64Zcode` form Parchmap's
+legacy core requires, and **injects your library into Parchmap's own game menu** beside the games it
+ships with. The volume is only ever read from, so mount it `:ro`.
 
-- The picker reads the library **live**, so a game you drop in appears on the next page reload.
-- A **restart** is what makes a new game reach Parchmap, since that is when the wrapping happens.
+- The picker reads the library **live**, so a game you drop in appears on the next page reload — and
+  plays in **both** players immediately. **No restart.** Wrapping happens on demand, so a story added
+  while the container is running is ready by the time the link is on screen; it also turns up in
+  Parchmap's own menu.
 - Glulx, TADS, Hugo and SCARE games play in Parchment. Parchmap is Z-machine only, and the picker says
-  so per game rather than offering a link that would fail.
+  so per game rather than offering a link that would fail. Which is which is decided by **reading the
+  file**, not its name: `.blb` and `.blorb` are containers that hold either format, and only the bytes
+  inside say which.
+- Nothing needs to be there to start with. With an empty, writable library the container seeds
+  **Adventure** so it plays out of the box; delete it and it stays deleted.
 
 ### Playing something that is not in the library
 
