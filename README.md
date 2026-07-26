@@ -115,7 +115,7 @@ site/
       web.js  web.css  jquery.min.js  ie.js
       bocfel.js  bocfel.wasm  waiting.gif
   dist/fonts/                <- optional; silences console 404s
-  parch-touch.js               <- from this repo's dist/
+  parch-touch.js             <- from this repo's dist/
   parch-touch.css
   stories/
       advent.z5              <- your story files, raw and unwrapped
@@ -298,7 +298,7 @@ Open **<http://localhost:8080/>**. From the tablet, use the server's own address
 You do not even need a library to start:
 
 ```bash
-docker run -d -p 8080:80 ParchTouch      # seeds Adventure into an empty library
+docker run -d -p 8080:80 parch-touch     # seeds Adventure into an empty library
 ```
 
 ### …or with Compose
