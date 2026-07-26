@@ -1,6 +1,7 @@
 # Installing ParchTouch
 
-Two tags in any GlkOte-based player's page. No build step for you, no dependencies, no configuration.
+Two tags in Parchment's page — or Parchmap's, or any other GlkOte-based player's. No build step for
+you, no dependencies, no configuration.
 
 > **Not running a player yet?** There is a Docker image that bundles two of them with the overlay
 > already installed and serves your own story library — see

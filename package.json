@@ -1,7 +1,18 @@
 {
   "name": "parch-touch",
   "version": "0.1.0",
-  "description": "On-screen command buttons for GlkOte-based interactive fiction players — play parser IF by touch, no keyboard.",
+  "description": "On-screen command buttons for Parchment, Parchmap and other GlkOte-based interactive fiction players — play parser IF by touch, no keyboard.",
+  "keywords": [
+    "interactive-fiction",
+    "parchment",
+    "parchmap",
+    "glkote",
+    "text-adventure",
+    "touch",
+    "tablet",
+    "z-machine",
+    "glulx"
+  ],
   "license": "MIT",
   "author": "Doug Compton",
   "type": "module",

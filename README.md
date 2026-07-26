@@ -1,12 +1,16 @@
 # ParchTouch
 
-On-screen commands for **GlkOte**-based interactive fiction players — play parser IF by touch, with no
-keyboard.
+On-screen commands for **Parchment**, **Parchmap** and other browser interactive fiction players — play
+parser IF by touch, with no keyboard.
 
 Parser IF means typing a command every turn, which is miserable on a tablet where a software keyboard
 covers a third of the screen. **ParchTouch** overlays a direction pad and an editable word list onto an
 existing browser IF player, and makes every word in the story text tappable — so a whole session needs
 zero keystrokes.
+
+It attaches to **GlkOte**, the display layer those players share, and to nothing else — so it works in
+Parchment and Parchmap alike, and in anything else built on GlkOte, present or future. It never asks
+which player it is in.
 
 MIT licensed. **Zero runtime dependencies**, no framework, one plain `<script>` tag.
 

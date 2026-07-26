@@ -25,7 +25,7 @@ npx esbuild src/if-buttons.ts \
 # esbuild then writes the bundle to stdout and this script would exit 0 having produced nothing.
 {
   printf '%s\n' \
-    '/*! ParchTouch — on-screen commands for GlkOte interactive fiction players.' \
+    '/*! ParchTouch — on-screen commands for Parchment and other GlkOte interactive fiction players.' \
     ' * SPDX-License-Identifier: MIT' \
     ' * Copyright (c) 2026 Doug Compton' \
     ' */'

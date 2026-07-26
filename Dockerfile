@@ -85,7 +85,7 @@ FROM parchmap-${WITH_PARCHMAP} AS parchmap-selected
 FROM nginx:alpine
 ARG WITH_PARCHMAP=1
 LABEL org.opencontainers.image.title="ParchTouch" \
-      org.opencontainers.image.description="Touch-playable interactive fiction: GlkOte players with the ParchTouch overlay" \
+      org.opencontainers.image.description="Touch-playable interactive fiction: Parchment and Parchmap with the ParchTouch overlay" \
       org.opencontainers.image.licenses="GPL-3.0-or-later"
 
 # node is used only by the entrypoint, to base64-wrap stories for Parchmap's legacy core and to
