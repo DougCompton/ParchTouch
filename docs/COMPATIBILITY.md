@@ -32,7 +32,8 @@ That is plan Task 5.3 and it needs hardware.
   `web.js` and no such element is ever created, so `inputMode()` can only return `'line'` or `'char'`
   here and the pager path is unreachable. It is *not* dead code — see Parchmap below.
 - `inputMode()` observed: `'line'` while awaiting a command.
-- Verified by tap alone: compass movement, `Look`, `Inv`, verb+noun in **both** orders, verb
+- Verified by tap alone: compass movement, `Look`, `Inv`, verb+noun, a multi-word command built by
+  appending in tap order (`look at building`), verb
   persistence across reload, lossless decoration of the banner text, echoed input never decorated, and
   no third-party network requests.
 - Tablet pass (device / OS / browser): **outstanding — needs hardware.**

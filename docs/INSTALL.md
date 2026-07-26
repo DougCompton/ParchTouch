@@ -93,16 +93,25 @@ can finish by tapping a word and then typing the `;` — or add the whole thing 
 `again`, `undo`, `save`, `restore`, …) and the verbs that take an object (`take`, `examine`, `open`, …).
 A tap **stages** text into the input box without sending it; press **↵** to send.
 
+Every tap **appends a word to the end**, in tap order, so the length of a command is not limited to
+two words:
+
 - No object needed: tap `Look`, then **↵**.
-- With a **direction** as the object: tap `Look`, then a compass button — that pair is sent at once,
-  so `Look` then `N` sends `look north`. Directions never need **↵**.
-- With an object: tap `Take`, then the object's word **in the story text** — either order works, so
-  tapping the word first and the verb second composes the same command.
+- With a **direction** as the object: tap `Look`, then a compass button — that is sent at once, so
+  `Look` then `N` sends `look north`. Directions never need **↵**; they always finish the command.
+- With an object: tap `Take`, then the object's word **in the story text**, then **↵**.
+- With a preposition: `Unlock` → "door" → `With` → "key" → **↵** sends `unlock door with key`. Add
+  `with`, `at`, `in`, `on`, `to`, `under` and friends to your word list once and every such command is
+  reachable by tapping.
+- **Tap order is literal.** Earlier versions of this addon paired a verb and a noun in either order;
+  that had to go to allow commands longer than two words, since a third tap has no unambiguous slot
+  to fill. Tap the verb first. Tapping "lamp" then `Examine` now stages `lamp examine`.
 - The list scrolls when it does not fit. The bar is never taller than three buttons.
 
-**Actions** (right, stacked) — neither sends a command, so both act immediately:
+**Actions** (right, stacked) — none of them sends a command, so all act immediately:
 
-- **✕** clears the command being built.
+- **⌫** removes the last word tapped, leaving the rest of the command alone.
+- **✕** clears the command being built entirely.
 - **⊞** hides/restores the map, on a host that has one.
 
 ## Theming

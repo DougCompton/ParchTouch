@@ -14,12 +14,22 @@ MIT.
 |-------|----------|--------|
 | `.ifb-moves` | 10 directions, plus ↵ in the centre and ⚙ in the corner | directions **SEND** at once (movement is wanted every turn); ↵ sends what is staged |
 | `.ifb-verbs` | ONE editable list holding every other word — `look` and `undo` sit beside `take` and `examine` | **STAGES** text into the host's input and sends nothing; the player presses ↵ |
-| `.ifb-actions` | ✕ and, on a map host, ⊞ — stacked vertically at the right | act immediately, because neither sends a command |
+| `.ifb-actions` | ⌫, ✕ and, on a map host, ⊞ — stacked vertically at the right | act immediately, because none of them sends a command |
 
 There is no longer a separate "commands" group: a no-argument command and a verb that wants a noun
-differ only in whether the player taps a story word next. Staging reads the composed text out of
-`command-model.ts` rather than appending to the field, which is what preserves either-order pairing
-(`lamp` then `Examine` stages `examine lamp`, not `lamp examine`).
+differ only in whether the player taps a story word next.
+
+**Every tap appends to a word list held in the glue layer** (`staged`), and the field is rewritten from
+`commandText(staged)` each time. This replaced a two-slot verb/noun state that paired taps in **either**
+order. That either-order guarantee was given up on purpose, at the user's direction, to allow commands
+of any length — `unlock door with key` is three taps too many for two slots, and a third tap under the
+old model silently discarded the first two. Consequences worth knowing before you "fix" anything:
+
+- Tap order is literal: `lamp` then `Examine` stages `lamp examine`. Do not re-add reordering; it
+  cannot be done without guessing which of N tapped words is the verb.
+- ⌫ (`.ifb-dropword`) drops the last word only. ✕ still clears everything.
+- ↵ and any direction END the command — both empty `staged`, so the next tap starts fresh.
+- A tapped **prose word** does not keep the `.ifb-armed` highlight; only a tapped button does.
 
 Read [README.md](README.md) for user-facing behaviour and
 [2026-07-24-glk-touch-addon.md](2026-07-24-glk-touch-addon.md) — the full implementation plan (§0 is
@@ -85,9 +95,10 @@ These are architectural contracts, not preferences — breaking one breaks the p
 Two source files, split so the interaction rules are testable without a browser:
 
 - [src/command-model.ts](src/command-model.ts) — **pure logic core.** No DOM, no globals, no side
-  effects. Immutable `CommandState`; every tap returns a new state plus a command to send or `null`
-  when the tap only *armed* something. Verb/noun pairing works in either order; tokenizing is
-  lossless (concatenating `Token.text` reproduces the input); length and verb-count caps live here.
+  effects. `appendToken` / `dropLastToken` / `commandText` assemble a command from tapped words and
+  enforce `MAX_COMMAND_LENGTH` (an append that would overflow it is refused, not truncated);
+  tokenizing is lossless (concatenating `Token.text` reproduces the input); verb-count, layout and
+  name caps live here too. `CommandState` and `tapVerb`/`tapWord` remain for the pairing tests.
 - [src/if-buttons.ts](src/if-buttons.ts) — **all DOM/GlkOte contact**, the bar UI, verb persistence,
   boot. esbuild bundles it (entry point) plus the model into one IIFE.
 - [src/if-buttons.css](src/if-buttons.css) — themeable via `--ifb-*` custom properties overridden

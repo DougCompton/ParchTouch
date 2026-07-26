@@ -101,11 +101,20 @@ test.describe('real Parchment (AsyncGlk)', () => {
     expect(await page.locator('.ifb-armed').count()).toBe(0)
   })
 
-  test('noun then verb is identical in effect (either order)', async ({ page }) => {
+  test('a command of several words can be built by tapping', async ({ page }) => {
+    // What tap-order append is for: the old pairing model could only ever produce two words, and a
+    // third tap discarded the first two.
+    await page.evaluate(() => {
+      window.IFButtons.saveVerbs(['look', 'at'])
+      window.IFButtons.renderVerbs()
+    })
+    await tapVerb(page, 'Look')
+    await tapVerb(page, 'At')
     await tapWord(page, 'building')
-    await tapVerb(page, 'Examine')
+    expect(await page.inputValue('.Input.LineInput')).toBe('look at building')
     await page.locator('#ifb-bar .ifb-enter').click()
-    await expect.poll(() => echoedCommands(page)).toContain('examine building')
+    await expect.poll(() => echoedCommands(page)).toContain('look at building')
+    await page.evaluate(() => window.IFButtons.resetVerbs())
   })
 
   test('echoed player input is never made tappable (P2-AC8 on a real host)', async ({ page }) => {

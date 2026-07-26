@@ -80,45 +80,6 @@
     }
     return tokens;
   }
-  function createState() {
-    return { pendingVerb: null, pendingNoun: null };
-  }
-  function clearPending(_state) {
-    return createState();
-  }
-  function result(state2, command) {
-    if (command !== null && command.length > MAX_COMMAND_LENGTH) {
-      return { state: createState(), command: null };
-    }
-    return { state: state2, command };
-  }
-  function tapVerb(state2, verb) {
-    const v = normalizeVerb(verb);
-    if (!v) {
-      return result(state2, null);
-    }
-    if (state2.pendingNoun) {
-      return result(createState(), v + " " + state2.pendingNoun);
-    }
-    return result({ pendingVerb: v, pendingNoun: null }, null);
-  }
-  function tapWord(state2, word) {
-    const n = normalizeWord(word);
-    if (!n) {
-      return result(state2, null);
-    }
-    if (state2.pendingVerb) {
-      return result(createState(), state2.pendingVerb + " " + n);
-    }
-    return result({ pendingVerb: null, pendingNoun: n }, null);
-  }
-  function tapDirect(_state, command) {
-    const c = str(command).trim();
-    if (!c) {
-      return result(createState(), null);
-    }
-    return result(createState(), c.replace(/\s+/g, " "));
-  }
   function addVerb(list, verb) {
     const v = normalizeVerb(verb);
     const out = list.slice();
@@ -134,6 +95,23 @@
   function removeVerb(list, verb) {
     const v = normalizeVerb(verb);
     return list.filter((x) => x !== v);
+  }
+  function appendToken(words, token) {
+    const t = str(token).trim().replace(/\s+/g, " ");
+    if (t === "") {
+      return words.slice();
+    }
+    const next = words.concat([t]);
+    if (commandText(next).length > MAX_COMMAND_LENGTH) {
+      return words.slice();
+    }
+    return next;
+  }
+  function dropLastToken(words) {
+    return words.slice(0, Math.max(0, words.length - 1));
+  }
+  function commandText(words) {
+    return words.join(" ");
   }
   var MAX_LAYOUTS = 12;
   var MAX_LAYOUT_NAME = 24;
@@ -276,7 +254,7 @@
   var MAP_SELECTORS = "#map, #map-container, .map-container, [data-if-map]";
   var MIN_LIFTED_HEIGHT = 24;
   var MIN_DRAG_PX = 6;
-  var state = createState();
+  var staged = [];
   var bootTimer = null;
   var barSizeObserver = null;
   var barResizeBound = false;
@@ -392,6 +370,8 @@
     }
     el.focus();
     fireKey(el, "Enter", 13);
+    staged = [];
+    renderArmed(null);
     return true;
   }
   function stageCommand(text) {
@@ -404,37 +384,41 @@
     return true;
   }
   function cancelPending() {
-    state = clearPending(state);
+    staged = [];
     renderArmed(null);
     stageCommand("");
   }
-  function tapDirection(direction) {
-    if (state.pendingVerb !== null) {
-      apply(tapWord(state, direction), null, "send");
-      return;
-    }
-    apply(tapDirect(state, direction), null, "send");
+  function showStaged() {
+    stageCommand(commandText(staged));
   }
-  function apply(res, armEl, delivery) {
-    var _a, _b;
-    state = res.state;
-    renderArmed(armEl);
-    if (delivery === "send") {
-      if (res.command) {
-        submitCommand(res.command);
-      }
+  function appendWord(word, armEl) {
+    const next = appendToken(staged, word);
+    if (next.length === staged.length) {
       return;
     }
-    const composed = (_b = (_a = res.command) != null ? _a : state.pendingVerb) != null ? _b : state.pendingNoun;
-    if (composed !== null) {
-      stageCommand(composed);
-    }
+    staged = next;
+    renderArmed(armEl);
+    showStaged();
+  }
+  function dropLastWord() {
+    staged = dropLastToken(staged);
+    renderArmed(null);
+    showStaged();
+  }
+  function stagedWords() {
+    return staged.slice();
+  }
+  function tapDirection(direction) {
+    const next = appendToken(staged, direction);
+    staged = [];
+    renderArmed(null);
+    submitCommand(commandText(next));
   }
   function renderArmed(armEl) {
     for (const el of document.querySelectorAll(".ifb-armed")) {
       el.classList.remove("ifb-armed");
     }
-    if (armEl && (state.pendingVerb || state.pendingNoun)) {
+    if (armEl && staged.length > 0) {
       armEl.classList.add("ifb-armed");
     }
   }
@@ -504,7 +488,7 @@
     bw.addEventListener("click", (e) => {
       const t = e.target;
       if (t instanceof HTMLElement && t.classList.contains("ifb-word")) {
-        apply(tapWord(state, t.textContent), t, "stage");
+        appendWord(normalizeWord(t.textContent), null);
       }
     });
   }
@@ -675,7 +659,9 @@
     }
     for (const v of loadVerbs()) {
       const label = v.startsWith("/") ? v : v.charAt(0).toUpperCase() + v.slice(1);
-      host.appendChild(button(label, "ifb-verb", (btn) => apply(tapVerb(state, v), btn, "stage")));
+      host.appendChild(button(label, "ifb-verb", (btn) => {
+        appendWord(normalizeVerb(v), btn);
+      }));
     }
     measureBar();
   }
@@ -973,6 +959,14 @@
     const actions = document.createElement("div");
     actions.className = "ifb-group ifb-actions";
     actions.appendChild(button(
+      "\u232B",
+      "ifb-dropword",
+      () => {
+        dropLastWord();
+      },
+      "Remove the last word of the command"
+    ));
+    actions.appendChild(button(
       "\u2715",
       "ifb-cancel",
       () => {
@@ -1122,9 +1116,6 @@
       bootTimer = null;
     }
   }
-  function currentState() {
-    return state;
-  }
   window.IFButtons = {
     findLineInput,
     inputMode,
@@ -1162,9 +1153,11 @@
     closeEditor,
     toggleEditor,
     isEditorOpen,
+    appendWord,
+    dropLastWord,
+    stagedWords,
     boot,
-    stopBoot,
-    currentState
+    stopBoot
   };
   if (document.readyState !== "loading") {
     boot(40);

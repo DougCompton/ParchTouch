@@ -470,16 +470,16 @@ describe('pressEnter', () => {
     expect(liveInput().value).toBe('')
   })
 
-  it('does not disturb an armed verb — it is a keyboard passthrough, not a command', () => {
+  it('finishes the command being built, so the next tap starts a fresh one', () => {
     const bw = makeBuffer(['a lamp'], { withInput: true })
     glue.decorateBuffer(bw)
     glue.buildBar()
     const take = [...document.querySelectorAll<HTMLButtonElement>('#ifb-bar .ifb-verb')]
       .find(b => /^take$/i.test(b.textContent ?? ''))
     take?.click()
-    expect(glue.currentState().pendingVerb).toBe('take')
+    expect(glue.stagedWords()).toEqual(['take'])
     glue.pressEnter()
-    expect(glue.currentState().pendingVerb).toBe('take')
+    expect(glue.stagedWords()).toEqual([])
   })
 
   it('does not throw when there is no input and no buffer at all', () => {
@@ -536,7 +536,7 @@ describe('staging and cancelling', () => {
     expect(keys).toEqual([])
   })
 
-  it('a verb+noun pair stages the whole command and still sends nothing', () => {
+  it('two taps build a two-word command and still send nothing', () => {
     const bw = makeBuffer(['a lamp'], { withInput: true })
     glue.decorateBuffer(bw)
     glue.buildBar()
@@ -575,7 +575,7 @@ describe('staging and cancelling', () => {
     expect(liveInput().value).toBe('take')
     glue.cancelPending()
     expect(liveInput().value).toBe('')
-    expect(glue.currentState().pendingVerb).toBe(null)
+    expect(glue.stagedWords()).toEqual([])
     expect(document.querySelectorAll('.ifb-armed').length).toBe(0)
   })
 
@@ -664,6 +664,111 @@ describe('settings editor', () => {
     expect(() => glue.openEditor()).not.toThrow()
     expect(() => glue.closeEditor()).not.toThrow()
     expect(glue.isEditorOpen()).toBe(false)
+  })
+})
+
+describe('building a command of more than two words', () => {
+  let glue: Glue
+  beforeEach(async () => {
+    localStorage.clear()
+    glue = await loadGlue()
+  })
+
+  const verb = (v: string) => [...document.querySelectorAll<HTMLButtonElement>('#ifb-bar .ifb-verb')]
+    .find(b => (b.textContent ?? '').toLowerCase() === v)
+
+  it('builds "unlock door with key" by tapping in order', () => {
+    // The reported need, and what the old pairing model could not express: a third tap used to
+    // DISCARD the first two words.
+    const bw = makeBuffer(['A door. A key.'], { withInput: true })
+    glue.saveVerbs(['unlock', 'with'])
+    glue.decorateBuffer(bw)
+    glue.buildBar()
+    const word = (w: string) => [...bw.querySelectorAll<HTMLElement>('.ifb-word')]
+      .find(n => (n.textContent ?? '').toLowerCase() === w)
+
+    verb('unlock')?.click(); expect(liveInput().value).toBe('unlock')
+    word('door')?.click();   expect(liveInput().value).toBe('unlock door')
+    verb('with')?.click();   expect(liveInput().value).toBe('unlock door with')
+    word('key')?.click();    expect(liveInput().value).toBe('unlock door with key')
+    expect(glue.stagedWords()).toEqual(['unlock', 'door', 'with', 'key'])
+  })
+
+  it('sends nothing until the return key, however many words', () => {
+    makeBuffer(['x'], { withInput: true })
+    glue.saveVerbs(['unlock', 'with'])
+    glue.buildBar()
+    const sent: string[] = []
+    liveInput().addEventListener('keypress', () => sent.push(liveInput().value))
+    verb('unlock')?.click()
+    verb('with')?.click()
+    expect(sent).toEqual([])
+    glue.pressEnter()
+    expect(sent).toEqual(['unlock with'])
+  })
+
+  it('the return key empties the command, so the next tap starts a new one', () => {
+    makeBuffer(['x'], { withInput: true })
+    glue.saveVerbs(['look'])
+    glue.buildBar()
+    verb('look')?.click()
+    glue.pressEnter()
+    expect(glue.stagedWords()).toEqual([])
+  })
+
+  it('⌫ removes the last word only', () => {
+    makeBuffer(['x'], { withInput: true })
+    glue.saveVerbs(['unlock', 'with'])
+    glue.buildBar()
+    verb('unlock')?.click()
+    verb('with')?.click()
+    document.querySelector<HTMLButtonElement>('#ifb-bar .ifb-dropword')?.click()
+    expect(liveInput().value).toBe('unlock')
+    expect(glue.stagedWords()).toEqual(['unlock'])
+  })
+
+  it('⌫ on an empty command does nothing and does not throw', () => {
+    makeBuffer(['x'], { withInput: true })
+    glue.buildBar()
+    const drop = document.querySelector<HTMLButtonElement>('#ifb-bar .ifb-dropword')
+    expect(() => drop?.click()).not.toThrow()
+    expect(glue.stagedWords()).toEqual([])
+  })
+
+  it('word order is TAP order — the either-order pairing guarantee is gone', () => {
+    /*
+     * Recorded deliberately. The project previously guaranteed that a noun tapped before its verb came
+     * out the same way round; tap-order append gives up that guarantee in exchange for commands longer
+     * than two words. Tapping the noun first now reads back in the order tapped.
+     */
+    const bw = makeBuffer(['a lamp'], { withInput: true })
+    glue.saveVerbs(['examine'])
+    glue.decorateBuffer(bw)
+    glue.buildBar()
+    ;[...bw.querySelectorAll<HTMLElement>('.ifb-word')]
+      .find(n => n.textContent === 'lamp')?.click()
+    verb('examine')?.click()
+    expect(liveInput().value).toBe('lamp examine')
+  })
+
+  it('refuses a word that would exceed the command length limit', () => {
+    makeBuffer(['x'], { withInput: true })
+    glue.saveVerbs(['take'])
+    glue.buildBar()
+    verb('take')?.click()
+    for (let i = 0; i < 40; i++) { glue.appendWord('padding', null) }
+    expect(liveInput().value.length).toBeLessThanOrEqual(120)
+  })
+
+  it('a highlight marks the word just added, and moves on the next tap', () => {
+    makeBuffer(['x'], { withInput: true })
+    glue.saveVerbs(['unlock', 'with'])
+    glue.buildBar()
+    verb('unlock')?.click()
+    expect(verb('unlock')?.classList.contains('ifb-armed')).toBe(true)
+    verb('with')?.click()
+    expect(verb('unlock')?.classList.contains('ifb-armed')).toBe(false)
+    expect(verb('with')?.classList.contains('ifb-armed')).toBe(true)
   })
 })
 
@@ -833,7 +938,7 @@ describe('a verb followed by a direction', () => {
     expect(sent).toEqual(['look north'])  // composed AND sent, with no return key
   })
 
-  it('clears the armed state afterwards, so the next direction is plain movement', () => {
+  it('clears the command afterwards, so the next direction is plain movement', () => {
     makeBuffer(['x'], { withInput: true })
     glue.saveVerbs(['look'])
     glue.buildBar()
@@ -845,7 +950,7 @@ describe('a verb followed by a direction', () => {
     north()?.click()
     north()?.click()
     expect(sent).toEqual(['look north', 'north'])
-    expect(glue.currentState().pendingVerb).toBe(null)
+    expect(glue.stagedWords()).toEqual([])
     expect(document.querySelectorAll('.ifb-armed').length).toBe(0)
   })
 
@@ -898,18 +1003,21 @@ describe('a verb followed by a direction', () => {
     expect(sent).toEqual(['/goto north'])
   })
 
-  it('with only a NOUN armed, a direction is still plain movement', () => {
-    // "north lamp" would be nonsense, so the direction wins and the pending noun is dropped.
+  it('a direction joins the end of whatever is being built, then sends', () => {
+    // Consistent with tap-order append: a direction never discards words already tapped. Whether
+    // "lamp north" means anything to the parser is the player's business — the addon sends what was
+    // asked for rather than silently dropping half of it.
     const bw = makeBuffer(['a lamp'], { withInput: true })
     glue.decorateBuffer(bw)
     glue.buildBar()
     const input = liveInput()
     const sent: string[] = []
     input.addEventListener('keypress', () => sent.push(input.value))
-    bw.querySelector<HTMLElement>('.ifb-word')?.click()   // arms the noun
+    const lamp = [...bw.querySelectorAll<HTMLElement>('.ifb-word')].find(n => n.textContent === 'lamp')
+    lamp?.click()
     north()?.click()
-    expect(sent).toEqual(['north'])
-    expect(glue.currentState().pendingNoun).toBe(null)
+    expect(sent).toEqual(['lamp north'])
+    expect(glue.stagedWords()).toEqual([])          // sending always empties the command
   })
 })
 

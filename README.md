@@ -416,12 +416,16 @@ nothing, so you can see exactly what will be sent and change your mind for free.
 
 - For a command that needs no object, one tap then **↵**: `Look` → `look` → send.
 - For one that takes an object, tap the word **in the story text**: `Take` then "lamp" stages
-  `take lamp`. **Either order works** — tapping "lamp" then `Examine` stages `examine lamp`, not
-  `lamp examine`.
+  `take lamp`.
+- **Every tap appends, in the order you tap**, so a command can be as long as you like:
+  `Unlock` → "door" → `With` → "key" stages `unlock door with key`. That is the whole reason the order
+  is literal: taps are read left to right, exactly as typed. Tapping "lamp" and *then* `Examine`
+  stages `lamp examine`, so tap the verb first.
 - The list scrolls if it does not fit; the bar itself is never more than three buttons tall.
 
-**The actions column** (right) — the two controls that never send a command, so they act at once:
+**The actions column** (right) — the three controls that never send a command, so they act at once:
 
+- **⌫** removes the last word, for when one tap out of four was wrong.
 - **✕** abandons whatever you were building and clears the input box.
 - **⊞** hides and restores the map, and appears only on a host that has one.
 
@@ -453,7 +457,7 @@ itself. It **works with or without** a map-providing host: if a map element is p
 compacts and gains a **⊞** collapse toggle; if not, that behaviour simply never appears. A grep gate
 (`npm run lint:independence`) fails the build if a host-specific identifier reaches `src/`.
 
-The code splits into a **pure logic core** (`src/command-model.ts` — command pairing, tokenizing,
+The code splits into a **pure logic core** (`src/command-model.ts` — command assembly, tokenizing,
 verb rules; no DOM at all) and a **DOM glue layer** (`src/if-buttons.ts`). That split is what makes
 the interaction rules testable without a browser. esbuild bundles both into one ES2018 IIFE.
 

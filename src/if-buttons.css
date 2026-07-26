@@ -172,7 +172,7 @@
   color: #fff;
 }
 
-.ifb-cancel { font-size: 18px; }
+.ifb-cancel, .ifb-dropword { font-size: 18px; }
 .ifb-editverbs, .ifb-maptoggle { font-size: 17px; }
 /* ↵ sits in the middle of the direction pad; sized with the other icon-only controls. */
 .ifb-enter { font-size: 18px; }

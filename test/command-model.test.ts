@@ -2,6 +2,7 @@ import { describe, it, expect, beforeEach } from 'vitest'
 import {
   normalizeWord, tokenize, createState, tapVerb, tapWord, tapDirect, clearPending,
   normalizeVerb, addVerb, removeVerb, moveVerb,
+  appendToken, dropLastToken, commandText,
   sanitizeLayouts, emptyLayouts, layoutNames, activeWords, setActiveWords,
   switchLayout, createLayout, renameLayout, deleteLayout,
   normalizeLayoutName, MAX_LAYOUTS, MAX_LAYOUT_NAME, DEFAULT_LAYOUT,
@@ -264,6 +265,60 @@ describe('host commands beginning with a slash', () => {
   it('a slash command still obeys the length and count limits', () => {
     expect(addVerb([], '/' + 'a'.repeat(200))).toEqual([])
     expect(normalizeVerb('/' + 'a'.repeat(5))).toBe('/aaaaa')
+  })
+})
+
+describe('building a command word by word', () => {
+  it('appends words in tap order', () => {
+    let w: string[] = []
+    for (const t of ['unlock', 'door', 'with', 'key']) { w = appendToken(w, t) }
+    expect(commandText(w)).toBe('unlock door with key')
+  })
+
+  it('keeps a multi-word entry as one token', () => {
+    expect(commandText(appendToken(appendToken([], 'turn on'), 'lamp'))).toBe('turn on lamp')
+  })
+
+  it('ignores an empty, whitespace-only, null or undefined word', () => {
+    for (const junk of ['', '   ', null, undefined]) {
+      expect(appendToken(['take'], junk)).toEqual(['take'])
+    }
+  })
+
+  it('collapses inner whitespace in a word', () => {
+    expect(appendToken([], '  turn   on ')).toEqual(['turn on'])
+  })
+
+  it('refuses a word that would exceed the command length limit', () => {
+    const long = 'a'.repeat(MAX_COMMAND_LENGTH - 5)
+    const w = appendToken(['take'], long)
+    expect(commandText(w).length).toBeLessThanOrEqual(MAX_COMMAND_LENGTH)
+    // and refusing leaves the command untouched rather than truncating it
+    expect(appendToken(w, 'more')).toEqual(w)
+  })
+
+  it('accepts a command exactly at the limit', () => {
+    const w = appendToken(['take'], 'a'.repeat(MAX_COMMAND_LENGTH - 'take '.length))
+    expect(commandText(w)).toHaveLength(MAX_COMMAND_LENGTH)
+  })
+
+  it('dropLastToken removes only the last word', () => {
+    expect(dropLastToken(['unlock', 'door', 'with'])).toEqual(['unlock', 'door'])
+  })
+
+  it('dropLastToken on an empty command is a no-op', () => {
+    expect(dropLastToken([])).toEqual([])
+  })
+
+  it('commandText of nothing is the empty string', () => {
+    expect(commandText([])).toBe('')
+  })
+
+  it('neither mutates the list passed in', () => {
+    const original = ['take', 'lamp']
+    appendToken(original, 'now')
+    dropLastToken(original)
+    expect(original).toEqual(['take', 'lamp'])
   })
 })
 

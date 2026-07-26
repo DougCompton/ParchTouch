@@ -170,6 +170,40 @@ export function removeVerb(list: readonly string[], verb: Loose): string[] {
 }
 
 /*
+ * ── Building a command word by word ──────────────────────────────────────────────────────────────
+ *
+ * A command is a LIST OF WORDS in the order they were tapped, and the whole list is what gets sent.
+ * That is what makes `unlock door with key` reachable: tap Unlock, the door, With, the key.
+ *
+ * This replaced a verb+noun PAIRING model, which could only ever produce two words — and worse, a
+ * third tap silently discarded the first two, because completing a pair reset the state and the next
+ * tap began a fresh command.
+ *
+ * The cost, accepted deliberately: word order is now tap order, so tapping a noun and then a verb
+ * gives `lamp examine` rather than `examine lamp`. The pairing functions above still exist and are
+ * still specified by their own tests — they are simply no longer how the DOM layer composes.
+ */
+
+/** Append a word. Refuses to exceed MAX_COMMAND_LENGTH rather than send something truncated. */
+export function appendToken(words: readonly string[], token: Loose): string[] {
+  const t = str(token).trim().replace(/\s+/g, ' ')
+  if (t === '') { return words.slice() }
+  const next = words.concat([t])
+  if (commandText(next).length > MAX_COMMAND_LENGTH) { return words.slice() }
+  return next
+}
+
+/** Drop the most recently added word, so one mis-tap costs one tap to undo. */
+export function dropLastToken(words: readonly string[]): string[] {
+  return words.slice(0, Math.max(0, words.length - 1))
+}
+
+/** The command as the game will see it. */
+export function commandText(words: readonly string[]): string {
+  return words.join(' ')
+}
+
+/*
  * ── Named layouts ────────────────────────────────────────────────────────────────────────────────
  *
  * One word list is not enough: vocabularies differ per game (decision D3), which is the whole reason

@@ -110,8 +110,8 @@ test('the cancel button clears the staged text too', async ({ page }) => {
 })
 
 test('the actions column is rightmost and stacked vertically', async ({ page }) => {
-  // No map element on this page, so the toggle is absent and only cancel remains.
-  expect(await page.locator('#ifb-bar .ifb-actions .ifb').allTextContents()).toEqual(['\u2715'])
+  // No map element on this page, so the toggle is absent \u2014 backspace and cancel remain, in that order.
+  expect(await page.locator('#ifb-bar .ifb-actions .ifb').allTextContents()).toEqual(['\u232b', '\u2715'])
   const box = await page.evaluate(() => {
     const lefts = [...document.querySelectorAll<HTMLElement>('#ifb-bar .ifb-actions .ifb')]
       .map(e => Math.round(e.getBoundingClientRect().left))
@@ -132,13 +132,42 @@ test('verb then word sends the pair, and clears the armed state', async ({ page 
   expect(await page.locator('.ifb-armed').count()).toBe(0)
 })
 
-test('word then verb sends the same pair (either order)', async ({ page }) => {
+test('word order is TAP order', async ({ page }) => {
+  // The either-order guarantee was given up deliberately, in exchange for commands longer than two
+  // words. Tapping the noun first now reads back in the order tapped.
   await tapWord(page, 'egg')
-  expect(await page.locator('.ifb-armed').count()).toBe(1)
   await tapVerb(page, 'Examine')
-  // Either order must compose the SAME text, not "egg examine".
-  expect(await page.inputValue('.Input.LineInput')).toBe('examine egg')
-  expect(await page.locator('.ifb-armed').count()).toBe(0)
+  expect(await page.inputValue('.Input.LineInput')).toBe('egg examine')
+})
+
+test('a four-word command can be built by tapping', async ({ page }) => {
+  await page.evaluate(() => {
+    window.SYN.reset()
+    window.IFButtons.saveVerbs(['unlock', 'with'])
+    window.IFButtons.renderVerbs()
+    window.SYN.addLine('A locked door. A brass key.')
+  })
+  await tapVerb(page, 'Unlock')
+  await tapWord(page, 'door')
+  await tapVerb(page, 'With')
+  await tapWord(page, 'key')
+  expect(await page.inputValue('.Input.LineInput')).toBe('unlock door with key')
+  expect(await page.evaluate(() => window.SYN.submitted())).toEqual([])
+
+  await page.locator('#ifb-bar .ifb-enter').click()
+  expect(await page.evaluate(() => window.SYN.submitted())).toEqual(['unlock door with key'])
+  await page.evaluate(() => window.IFButtons.resetVerbs())
+})
+
+test('⌫ removes the last word without abandoning the command', async ({ page }) => {
+  await page.evaluate(() => { window.SYN.reset(); window.SYN.addLine('A door here.') })
+  await tapVerb(page, 'Take')
+  await tapWord(page, 'door')
+  expect(await page.inputValue('.Input.LineInput')).toBe('take door')
+  await page.locator('#ifb-bar .ifb-dropword').click()
+  expect(await page.inputValue('.Input.LineInput')).toBe('take')
+  await page.locator('#ifb-bar .ifb-cancel').click()
+  expect(await page.inputValue('.Input.LineInput')).toBe('')
 })
 
 test('a multi-word verb pairs correctly', async ({ page }) => {

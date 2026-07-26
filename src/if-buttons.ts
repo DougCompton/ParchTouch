@@ -9,14 +9,14 @@
  *
  * THE INTERACTION MODEL, left to right across the bar:
  *   .ifb-moves    the direction pad. Directions SEND immediately — movement is wanted every turn and
- *                 is unambiguous, so confirming it would double the taps for the commonest action. With
- *                 a verb armed the direction is that verb's OBJECT and the pair is sent, so Look then N
- *                 is `look north`. Its centre is ↵ (send what is staged) and its corner the gear.
- *   .ifb-verbs    one editable list holding every other word, from `look` to `take`. A tap STAGES text
- *                 into the host's input and sends nothing; the player reviews it and presses ↵. Verb
- *                 and noun pair in either order — tap Examine then a word, or a word then Examine.
- *   .ifb-actions  ✕ (abandon the composition) and, when a map host is detected, the map toggle. The
- *                 only non-movement controls that act on the spot, because neither sends a command.
+ *                 is unambiguous, so confirming it would double the taps for the commonest action. A
+ *                 direction joins the end of whatever is being built before sending, so Look then N is
+ *                 `look north`. Its centre is ↵ (send what is staged) and its corner the gear.
+ *   .ifb-verbs    one editable list holding every other word, from `look` to `take`. A tap APPENDS the
+ *                 word to the command being built and sends nothing; the player reviews it and presses
+ *                 ↵. Words come out in TAP ORDER, so `unlock door with key` is Unlock, door, With, key.
+ *   .ifb-actions  ⌫ (drop the last word), ✕ (abandon the whole command) and, on a map host, the map
+ *                 toggle. The only non-movement controls that act on the spot: none sends a command.
  *
  * HOW IT INTEGRATES — no fork of any host, no patched engine. It relies only on GlkOte's documented
  * DOM contract:
@@ -41,13 +41,14 @@
  */
 
 import {
-  createState, clearPending, tapVerb, tapWord, tapDirect, tokenize,
+  tokenize, normalizeWord, normalizeVerb,
+  appendToken, dropLastToken, commandText,
   DEFAULT_VERBS,
   addVerb as addVerbToList, removeVerb as removeVerbFromList, moveVerb as moveVerbInList,
   sanitizeLayouts, layoutNames, activeWords, setActiveWords, emptyLayouts,
   switchLayout as switchLayoutIn, createLayout as createLayoutIn,
   renameLayout as renameLayoutIn, deleteLayout as deleteLayoutIn,
-  type CommandState, type TapResult, type LayoutStore,
+  type LayoutStore,
 } from './command-model'
 
 /** Which kind of input the game is waiting for, if any. */
@@ -97,7 +98,9 @@ export interface DebugHandle {
   isEditorOpen: typeof isEditorOpen
   boot: typeof boot
   stopBoot: typeof stopBoot
-  currentState: typeof currentState
+  appendWord: typeof appendWord
+  dropLastWord: typeof dropLastWord
+  stagedWords: typeof stagedWords
 }
 
 declare global {
@@ -134,7 +137,11 @@ const MIN_LIFTED_HEIGHT = 24
 // finger still selects instead of silently reordering.
 const MIN_DRAG_PX = 6
 
-let state: CommandState = createState()
+/**
+ * The command being built, one word per tap, in tap order. Sending or clearing empties it.
+ * This is the composition state; the pure pairing helpers are no longer used for it.
+ */
+let staged: string[] = []
 let bootTimer: ReturnType<typeof setTimeout> | null = null
 let barSizeObserver: ResizeObserver | null = null
 let barResizeBound = false
@@ -274,7 +281,6 @@ export function submitCommand(command: string | null | undefined): boolean {
  * cases a command button cannot: a partially typed line, a "press any key" char prompt, and a pager.
  * Those last two are the states where a tap otherwise appears to do nothing.
  *
- * Leaves any armed verb or noun alone: this is a keyboard passthrough, not a command being built.
  * Returns true only when a Return actually reached a line input.
  */
 export function pressEnter(): boolean {
@@ -293,14 +299,17 @@ export function pressEnter(): boolean {
   if (!el) { return false }
   el.focus()
   fireKey(el, 'Enter', 13)
+  // The host has taken the line, so the command being built is finished with.
+  staged = []
+  renderArmed(null)
   return true
 }
 
 /**
  * Write text into the host's input WITHOUT sending it, so the player can review it and press ↵.
  *
- * Assigns rather than appends, for the same reason submitCommand() does: the composed text already
- * contains the whole command, and a host may have left residue in the field.
+ * Assigns rather than appends, for the same reason submitCommand() does: the text passed in is already
+ * the whole command, and a host may have left residue in the field.
  */
 export function stageCommand(text: string): boolean {
   const el = findLineInput()
@@ -310,66 +319,64 @@ export function stageCommand(text: string): boolean {
   return true
 }
 
-/** Clear the composition: nothing armed, nothing staged in the field. */
+/** Abandon the whole command: nothing highlighted, nothing left in the field. */
 export function cancelPending(): void {
-  state = clearPending(state)
+  staged = []
   renderArmed(null)
   stageCommand('')
 }
 
+/** Show the command being built in the host's input, without sending it. */
+function showStaged(): void {
+  stageCommand(commandText(staged))
+}
+
 /**
- * How a tap reaches the game.
+ * Add one word to the command being built.
  *
- *  'send'  — deliver immediately. Movement only: a direction is unambiguous and wanted every turn, so
- *            making the player confirm it would double the taps for the commonest action.
- *  'stage' — write the composition into the input and stop. Everything in the verb strip works this
- *            way, so a mis-tap costs nothing and the player sees exactly what will be sent before
- *            pressing ↵.
+ * Word order is TAP ORDER — that is the whole point, and what makes `unlock door with key` reachable.
+ * `armEl` is the control that was tapped: a verb button keeps a highlight until the next tap, so it is
+ * obvious which word was just added.
  */
-type Delivery = 'send' | 'stage'
+export function appendWord(word: string, armEl: HTMLElement | null): void {
+  const next = appendToken(staged, word)
+  if (next.length === staged.length) { return }     // empty, or would exceed the length limit
+  staged = next
+  renderArmed(armEl)
+  showStaged()
+}
+
+/** Remove the last word, so one mis-tap costs one tap rather than the whole command. */
+export function dropLastWord(): void {
+  staged = dropLastToken(staged)
+  renderArmed(null)
+  showStaged()
+}
+
+/** The words of the command being built, in order. */
+export function stagedWords(): string[] { return staged.slice() }
 
 /**
  * A tap on the direction pad.
  *
- * With a verb armed, the direction is that verb's OBJECT, not a movement command: tapping Look then N
- * means `look north`. It used to mean plain `north`, because tapDirect() is defined to drop anything
- * armed — correct when Look was itself a direct command, but silently destructive now that every word
- * is staged and waiting for something to complete it.
- *
- * Either way it SENDS at once. A direction is wanted every turn and is unambiguous, so it is the one
- * thing not worth confirming; routing through tapWord() keeps the verb+object pairing rules in the
- * model rather than duplicating them here.
+ * A direction always SENDS at once — it is wanted every turn and is unambiguous, so it is the one thing
+ * not worth confirming. If a command is already being built the direction joins the end of it first, so
+ * Look then N sends `look north` rather than throwing the verb away.
  */
 export function tapDirection(direction: string): void {
-  if (state.pendingVerb !== null) {
-    apply(tapWord(state, direction), null, 'send')
-    return
-  }
-  apply(tapDirect(state, direction), null, 'send')
+  // One path for both cases: appending to an empty command yields just the direction, so a bare tap
+  // needs no special handling. appendToken() also trims, collapses runs of spaces and refuses an
+  // append that would exceed MAX_COMMAND_LENGTH — in which case the staged text is sent as it stood.
+  const next = appendToken(staged, direction)
+  staged = []
+  renderArmed(null)
+  submitCommand(commandText(next))
 }
 
-function apply(res: TapResult, armEl: HTMLElement | null, delivery: Delivery): void {
-  state = res.state
-  renderArmed(armEl)
-
-  if (delivery === 'send') {
-    if (res.command) { submitCommand(res.command) }
-    return
-  }
-
-  /*
-   * Show whatever the composition currently amounts to: the finished command once a pair completes, or
-   * the half of it that is armed so far. Reading it out of the model rather than appending to the field
-   * is what preserves either-order pairing — tapping "lamp" then Examine still stages "examine lamp"
-   * and not "lamp examine".
-   */
-  const composed = res.command ?? state.pendingVerb ?? state.pendingNoun
-  if (composed !== null) { stageCommand(composed) }
-}
-
+/** Highlight the control just tapped, if any; every later tap moves or clears the highlight. */
 function renderArmed(armEl: HTMLElement | null): void {
   for (const el of document.querySelectorAll('.ifb-armed')) { el.classList.remove('ifb-armed') }
-  if (armEl && (state.pendingVerb || state.pendingNoun)) { armEl.classList.add('ifb-armed') }
+  if (armEl && staged.length > 0) { armEl.classList.add('ifb-armed') }
 }
 
 // ── word decoration ──────────────────────────────────────────────────────────────────────────
@@ -459,7 +466,9 @@ function ensureWordClicks(near?: Element | null): void {
     // One tokenizer-produced word only: normalizeWord tolerates inner spaces, so a multi-word
     // string here could smuggle an Inform command separator into the line.
     if (t instanceof HTMLElement && t.classList.contains('ifb-word')) {
-      apply(tapWord(state, t.textContent), t, 'stage')
+      // No highlight for a prose word: the highlight marks a tapped BUTTON, and leaving it on a
+      // word in the middle of the story text reads as decoration rather than state.
+      appendWord(normalizeWord(t.textContent), null)
     }
   })
 }
@@ -654,7 +663,7 @@ export function renderVerbs(): void {
     // A host command like `/note` is shown verbatim: capitalising it would only uppercase the slash,
     // and these read as literal commands rather than English words.
     const label = v.startsWith('/') ? v : v.charAt(0).toUpperCase() + v.slice(1)
-    host.appendChild(button(label, 'ifb-verb', btn => apply(tapVerb(state, v), btn, 'stage')))
+    host.appendChild(button(label, 'ifb-verb', btn => { appendWord(normalizeVerb(v), btn) }))
   }
   measureBar()          // a different number of verbs is a different bar height
 }
@@ -977,6 +986,10 @@ export function buildBar(): HTMLElement {
    */
   const actions = document.createElement('div')
   actions.className = 'ifb-group ifb-actions'
+  // ⌫ before ✕: with commands several words long, undoing one word is the common correction and
+  // throwing the whole command away is the rare one.
+  actions.appendChild(button('⌫', 'ifb-dropword', () => { dropLastWord() },
+    'Remove the last word of the command'))
   actions.appendChild(button('✕', 'ifb-cancel', () => { cancelPending() },
     'Clear the command being built'))
   row.appendChild(actions)
@@ -1175,8 +1188,9 @@ export function stopBoot(): void {
   }
 }
 
-/** Inspect the armed verb/noun from the console when debugging. */
-export function currentState(): CommandState { return state }
+/*
+ * `stagedWords()` is the console handle for the command being built — see the assignment below.
+ */
 
 // Console debugging handle ONLY (the troubleshooting docs use `IFButtons.inputMode()`). Never the
 // interface between our own modules — those use ESM imports.
@@ -1188,7 +1202,7 @@ window.IFButtons = {
   createLayout, renameActiveLayout, deleteActiveLayout, resetVerbs, addVerbFromUI,
   removeVerbFromUI, moveVerbFromUI, selectVerb, selectedVerbName, moveSelected, deleteSelected,
   renderVerbs, openEditor, closeEditor, toggleEditor, isEditorOpen,
-  boot, stopBoot, currentState,
+  appendWord, dropLastWord, stagedWords, boot, stopBoot,
 }
 
 if (document.readyState !== 'loading') {
