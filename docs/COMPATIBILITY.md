@@ -1,8 +1,10 @@
 # Verified hosts
 
-Verified by the automated end-to-end suite (`npm run test:e2e`) driving **real** hosts in **real
-browsers** — Chromium and WebKit — playing a real Z-machine story (Adventure, release 9 / 060321).
-Re-run it to reproduce every claim below.
+Every claim here was observed against real software, not inferred. Most of it comes from the automated
+end-to-end suite (`npm run test:e2e`), which drives **real** hosts in **real browsers** — Chromium and
+WebKit — playing a real Z-machine story (Adventure, release 9 / 060321); re-run it to reproduce those.
+The build-time findings (Parchment's submodules, its missing lockfile) come from building the Docker
+image, which is reproducible with `docker build .`.
 
 **Still outstanding: a physical tablet.** WebKit is iOS Safari's engine family, so the synthetic-event
 mechanism is proven there, but real touch input, the software keyboard and viewport behaviour are not.
@@ -10,7 +12,7 @@ That is plan Task 5.3 and it needs hardware.
 
 | Host | Version / commit | Verified | `.Input.LineInput`? | Notes |
 |------|------------------|----------|---------------------|-------|
-| Parchment (modern) | live `iplayif.com` build, `dist/web/*`, fetched 2026-07-25 | 2026-07-25 | **yes** | reference host; MIT; AsyncGlk; engine `bocfel.wasm` |
+| Parchment (modern) | harness: live `iplayif.com` build, fetched 2026-07-25 · Docker image: built from `master` source | 2026-07-25 | **yes** | reference host; MIT; AsyncGlk; engine `bocfel.wasm` |
 | Parchmap | `roylaza/Parchmap` `main` @ `f9ecfde`, cloned 2026-07-25 | 2026-07-25 | **yes** | GPL-3.0; legacy Parchment core + jQuery 3.5.1; also provides a map |
 
 ---
@@ -70,7 +72,7 @@ string containing no `/` or `=`, so the page dies with `TypeError: Cannot read p
   Whether `?story=` reaches a raw story *outside* `games/` is **still open** — not needed for the addon,
   and it only affects how a downstream deployment serves its library.
 - Host features unaffected: its own map toggles and line input remain, and after a reload the addon's
-  verbs *and* the host's map data both survive, so `IFB_Verbs` does not disturb its `PM_*` keys.
+  verbs *and* the host's map data both survive, so the addon's storage does not disturb its `PM_*` keys.
 - No third-party requests, with `GA_TRACK = false` (the harness setup flips it; it ships `true`).
 
 ### `.MorePrompt` DOES exist here, and the visibility guard matters
@@ -85,6 +87,42 @@ and **the first tap can legitimately be consumed by the pager**. That is correct
 sent while paging would be swallowed — but it is worth knowing when a tap appears to "do nothing".
 The `isVisible()` guard in `if-buttons.ts` is what stops a retained-but-hidden pager from deadlocking
 input forever; keep it.
+
+### Its own `/commands` are found by POLLING, not by a key event
+
+It reserves `/name` for its own features — `/map`, `/help`, `/notes`, `/theme`, `/goto`, `/see`,
+`/note`, `/room-notes`, `/clear`, `/quit`. `Input.Process()` runs from a **200 ms polling loop** and
+simply watches the input field; it hooks no key event for these at all.
+
+That decides the interaction, so it is worth stating plainly: **staging the text is the whole gesture,
+and the return key must NOT be pressed.** Tapping such a button puts `/map` in the field, the host picks
+it up within a fraction of a second, acts on it and clears the field itself — the game never sees the
+text. Pressing return first hands it to the interpreter instead, which answers *"That's not a verb I
+recognise"*.
+
+Verified: field goes `"/map"` → `""` with no new echo in the buffer. This is also why
+`normalizeVerb()` keeps a leading slash; it used to strip it, turning `/note` into `note`.
+
+### It pins panels to the VIEWPORT, which a fixed overlay must account for
+
+Its map panel is `position: fixed; top: 0; bottom: 0` and its game frame `position: fixed; top: 20px;
+bottom: 20px`. Padding `.BufferWindow` does nothing for either, so a bar fixed to the bottom of the
+screen sat over the map's lower third and the host's own footer.
+
+Three specifics, each of which cost an attempt:
+
+- **`bottom` alone does nothing.** With both `top` and `height` set the element is over-constrained and
+  `bottom` is ignored — even with `!important`, no rect moved.
+- **Shrink, do not move.** Shifting `top` up clears the bar but pushes the same number of pixels off the
+  TOP of the screen: measured 148px of the map and 108px of the game frame. Capping `max-height` is what
+  actually works.
+- **Shrinking is only half of it.** `#map` leaves its overflow visible, so its room list spilled 67px
+  past the correctly-shortened panel and painted over the bar anyway. The panel has to scroll its own
+  overflow.
+
+Measured after the fix, at 820x1100 and 1100x820: map, game frame, footer, last output line and the
+live input all clear the bar, and nothing is clipped above. On Parchment the same rule adjusts **zero**
+elements, because it pins nothing to the viewport bottom.
 
 ### Interop hazard: it overwrites the global `Map`
 
@@ -131,11 +169,29 @@ So vendor the modern build from the live deploy or from a source build, not from
 note `web.js` is loaded as `type="module"`, which is exactly why the addon can be a plain classic
 script loaded afterwards: it never joins the host's module graph.
 
+### Building it from source — two things that stop you
+
+Verified by building it in a container:
+
+- **`--recurse-submodules` is required.** `asyncglk`, `emglken`, `glkote`, `ifvms.js` and `quixe` are
+  git submodules; a plain shallow clone builds until it dies on
+  `Could not resolve "../upstream/asyncglk/src/index-common.js"`.
+- **`npm ci` cannot be used.** Upstream ships no `package-lock.json`, so `npm ci` exits with a usage
+  error. Use `npm install`.
+
+A source build is also strictly better than the live deploy's assets: it produces every interpreter —
+`bocfel` (Z-machine), `glulxe` and `git` (Glulx), `hugo`, `scare`, `tads` — not just the one.
+
 ---
 
-## What the jsdom suite covers (103 tests, no browser)
+## What the jsdom suite covers (no browser)
 
 Complementary, not a substitute: selector precedence and last-match-wins, all three `inputMode()`
 states including a pager hidden by inline style / the `hidden` attribute / a stylesheet class, command
-assignment and residue replacement, lossless and idempotent decoration, XSS safety, the verb editor and
-its `localStorage` failure modes, and booting against a bare GlkOte DOM with no host scripts at all.
+assignment and residue replacement, lossless and idempotent decoration, XSS safety, the word list and
+its `localStorage` failure modes, named layouts and the migration from the original single-list key, and
+booting against a bare GlkOte DOM with no host scripts at all.
+
+Run `npm test` for the current unit count and `npm run test:e2e` for the browser suite; both are gates in
+`sh scripts/ci.sh`. Counts are deliberately not quoted here — they go stale faster than anything else in
+this file.

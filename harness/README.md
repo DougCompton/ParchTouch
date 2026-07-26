@@ -9,10 +9,19 @@ files are **git-ignored** — fetch them yourself.
 cd harness
 mkdir -p vendor
 
-# Parchment (MIT) — take the web build from a release:
-#   https://github.com/curiousdannii/parchment/releases
+# Parchment (MIT) — BUILD FROM SOURCE. Do not use a GitHub release asset: those are a legacy
+# build, not the modern AsyncGlk one this addon is verified against (see ../docs/COMPATIBILITY.md).
+# --recurse-submodules is essential — asyncglk/emglken/glkote/ifvms/quixe are submodules, and
+# without them the build fails on: Could not resolve "../upstream/asyncglk/src/index-common.js"
+git clone --depth 1 --recurse-submodules --shallow-submodules \
+    https://github.com/curiousdannii/parchment vendor/parchment
+cd vendor/parchment && npm install && npm run build && cd ../..
+# npm ci does NOT work: upstream ships no package-lock.json.
 # Result: vendor/parchment/index.html + vendor/parchment/dist/web/*
-# Record the tag you used in ../docs/COMPATIBILITY.md
+# Record the commit you built in ../docs/COMPATIBILITY.md
+#
+# Quicker alternative if you only want the Z-machine: copy index.html and dist/web/{web.js,web.css,
+# jquery.min.js,ie.js,bocfel.js,bocfel.wasm,waiting.gif} from a live deploy such as iplayif.com.
 
 # Parchmap (GPL-3.0)
 git clone --depth 1 https://github.com/roylaza/Parchmap vendor/parchmap
