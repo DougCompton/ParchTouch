@@ -29,7 +29,7 @@ import { createServer } from 'node:http'
 import { readFileSync } from 'node:fs'
 import { refresh, ensureWrapped, parchmapPresent } from './prepare.mjs'
 
-const PORT = Number(process.env['GLKTOUCH_HELPER_PORT'] ?? 8091)
+const PORT = Number(process.env['PARCHTOUCH_HELPER_PORT'] ?? 8091)
 const HOST = '127.0.0.1'
 
 /** The prefix nginx proxies wrapped-story requests under. */
@@ -132,20 +132,20 @@ export function startLibraryServer() {
         handle(req, res)
       } catch (err) {
         // One bad request must not stop the helper answering the next one.
-        console.warn('[glk-touch] library request failed: ' + (err?.message ?? err))
+        console.warn('[ParchTouch] library request failed: ' + (err?.message ?? err))
         if (!res.headersSent) { sendText(res, 500, 'internal error') }
       }
     })
   } catch (err) {
-    console.warn('[glk-touch] library helper unavailable: ' + (err?.message ?? err))
+    console.warn('[ParchTouch] library helper unavailable: ' + (err?.message ?? err))
     return null
   }
   server.on('error', err => {
-    console.warn('[glk-touch] library helper stopped listening: ' + (err?.message ?? err)
+    console.warn('[ParchTouch] library helper stopped listening: ' + (err?.message ?? err)
       + ' — the picker will fall back to the directory index')
   })
   server.listen(PORT, HOST, () => {
-    console.log('[glk-touch] library helper on http://' + HOST + ':' + PORT)
+    console.log('[ParchTouch] library helper on http://' + HOST + ':' + PORT)
   })
   // Do not hold the process open on its own account; nginx is what keeps the container alive.
   server.unref()

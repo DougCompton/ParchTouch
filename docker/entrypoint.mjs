@@ -17,7 +17,7 @@ import { startLibraryServer } from './library.mjs'
 try {
   prepare()
 } catch (err) {
-  console.warn('[glk-touch] library preparation failed, serving anyway: ' + (err?.message ?? err))
+  console.warn('[ParchTouch] library preparation failed, serving anyway: ' + (err?.message ?? err))
 }
 
 /*

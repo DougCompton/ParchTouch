@@ -43,10 +43,10 @@ classic script a real deployment installs. Build it once, or leave the watch bui
 ```bash
 cd ..
 npm run build          # one-shot
-npm run dev            # or: rebuild dist/glk-touch.js on every save (own terminal)
+npm run dev            # or: rebuild dist/parch-touch.js on every save (own terminal)
 ```
 
-`npm run dev` also emits `dist/glk-touch.js.map`, which is git-ignored; the released bundle from
+`npm run dev` also emits `dist/parch-touch.js.map`, which is git-ignored; the released bundle from
 `scripts/build.sh` has no map.
 
 > On Windows these scripts run `sh`, so use Git Bash (or WSL) — `sh` is not on the PATH in
@@ -78,7 +78,7 @@ node ../scripts/serve-harness.mjs [port]
   JS-wrapped (`Advent.z5.js`). Whether it also accepts a raw story outside `games/` is still open —
   `docs/COMPATIBILITY.md` question 4.
 
-Both pages load `/dist/glk-touch.js` and `/dist/glk-touch.css` — the exact artifacts a downstream
+Both pages load `/dist/parch-touch.js` and `/dist/parch-touch.css` — the exact artifacts a downstream
 deployment copies out of a git tag. Serving the real bundle rather than the ESM sources is deliberate:
 it removes the "works in dev, broken in dist" failure mode entirely. Reload the page after a rebuild
 to pick up a change (`nginx.conf` sends `Cache-Control: no-store` for `/dist/`).

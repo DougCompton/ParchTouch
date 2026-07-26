@@ -1,5 +1,5 @@
 /*
- * command-model.ts — pure command-building logic for the glk-touch overlay.
+ * command-model.ts — pure command-building logic for the ParchTouch overlay.
  *
  * SPDX-License-Identifier: MIT
  * Copyright (c) 2026 Doug Compton

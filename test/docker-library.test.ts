@@ -69,14 +69,14 @@ function entryFor(lib: readonly LibraryEntry[], name: string): LibraryEntry {
 /** Import prepare.mjs bound to this test's temporary tree. */
 async function loadPrepare() {
   vi.resetModules()
-  process.env['GLKTOUCH_STORIES'] = stories
-  process.env['GLKTOUCH_ROOT'] = root
-  process.env['GLKTOUCH_SEED'] = join(dir, 'no-seed')
+  process.env['PARCHTOUCH_STORIES'] = stories
+  process.env['PARCHTOUCH_ROOT'] = root
+  process.env['PARCHTOUCH_SEED'] = join(dir, 'no-seed')
   return await import('../docker/prepare.mjs')
 }
 
 beforeEach(() => {
-  dir = mkdtempSync(join(tmpdir(), 'glk-touch-lib-'))
+  dir = mkdtempSync(join(tmpdir(), 'parch-touch-lib-'))
   stories = join(dir, 'stories')
   root = join(dir, 'root')
   games = join(root, 'parchmap', 'games')
@@ -88,9 +88,9 @@ beforeEach(() => {
 })
 
 afterEach(() => {
-  delete process.env['GLKTOUCH_STORIES']
-  delete process.env['GLKTOUCH_ROOT']
-  delete process.env['GLKTOUCH_SEED']
+  delete process.env['PARCHTOUCH_STORIES']
+  delete process.env['PARCHTOUCH_ROOT']
+  delete process.env['PARCHTOUCH_SEED']
   rmSync(dir, { recursive: true, force: true })
 })
 
@@ -144,9 +144,9 @@ describe('the story baked into the image', () => {
 
   async function loadWithSeed() {
     vi.resetModules()
-    process.env['GLKTOUCH_STORIES'] = stories
-    process.env['GLKTOUCH_ROOT'] = root
-    process.env['GLKTOUCH_SEED'] = withSeed()
+    process.env['PARCHTOUCH_STORIES'] = stories
+    process.env['PARCHTOUCH_ROOT'] = root
+    process.env['PARCHTOUCH_SEED'] = withSeed()
     return await import('../docker/prepare.mjs')
   }
 
@@ -302,9 +302,9 @@ describe('the library helper HTTP surface', () => {
   /** Drive the request handler directly: no socket, no port, no ordering to race on. */
   async function request(url: string, method = 'GET') {
     vi.resetModules()
-    process.env['GLKTOUCH_STORIES'] = stories
-    process.env['GLKTOUCH_ROOT'] = root
-    process.env['GLKTOUCH_SEED'] = join(dir, 'no-seed')
+    process.env['PARCHTOUCH_STORIES'] = stories
+    process.env['PARCHTOUCH_ROOT'] = root
+    process.env['PARCHTOUCH_SEED'] = join(dir, 'no-seed')
     const { handleLibraryRequest } = await import('../docker/library.mjs')
     return await new Promise<{ status: number, headers: Record<string, string>, body: string }>(resolve => {
       const chunks: Buffer[] = []

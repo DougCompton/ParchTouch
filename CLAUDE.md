@@ -4,9 +4,15 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 ## What this is
 
-`glk-touch` — a touch command overlay injected into an existing **GlkOte**-based browser
+`ParchTouch` — a touch command overlay injected into an existing **GlkOte**-based browser
 interactive-fiction player via two tags. Zero runtime dependencies, no framework, ES2018 IIFE bundle.
 MIT.
+
+Named **glk-touch** until 2026-07-26 — the plan document specified it, the repository was always
+`ParchTouch`, and the two were reconciled in favour of the repository. Every commit and commit message
+before that date says glk-touch; nothing in the tree does. The npm/file/path form is `parch-touch`, the
+display form `ParchTouch`. Internal identifiers were never affected: the DOM prefix is `ifb-`, the CSS
+custom properties `--ifb-*`, and the console handle `window.IFButtons`.
 
 **The interaction model**, left to right across the bar — get this wrong and nothing else makes sense:
 
@@ -32,7 +38,7 @@ old model silently discarded the first two. Consequences worth knowing before yo
 - A tapped **prose word** does not keep the `.ifb-armed` highlight; only a tapped button does.
 
 Read [README.md](README.md) for user-facing behaviour and
-[2026-07-24-glk-touch-addon.md](2026-07-24-glk-touch-addon.md) — the full implementation plan (§0 is
+[2026-07-24-parch-touch-addon.md](2026-07-24-parch-touch-addon.md) — the full implementation plan (§0 is
 the cold-start briefing; phases and numbered tasks are referenced by commit messages and by code
 comments such as "see Task 5.1").
 
@@ -45,7 +51,7 @@ npm test -- -t 'inputMode'                 # one describe/it by name
 npm run test:watch
 npm run typecheck           # tsc --noEmit — esbuild strips types but never checks them
 npm run lint:independence   # grep gate: fails if src/ names a specific host
-npm run build               # dist/glk-touch.js + dist/glk-touch.css
+npm run build               # dist/parch-touch.js + dist/parch-touch.css
 npm run dev                 # esbuild --watch (also emits a git-ignored .map)
 npm run test:e2e            # playwright: (chromium + webkit) against REAL hosts
 npx playwright test --project=webkit parchmap.spec        # one project + one spec
@@ -66,8 +72,8 @@ These are architectural contracts, not preferences — breaking one breaks the p
    itself — degrade, never throw. It must run in a page with no other application scripts at all;
    `test/dom-glue.test.ts` → `describe('host independence')` and `scripts/check-independence.sh`
    enforce this.
-2. **`dist/` is committed on purpose.** A downstream deployment copies `dist/glk-touch.js`,
-   `dist/glk-touch.css`, `LICENSE` and `docs/COMPATIBILITY.md` straight out of a git tag — no npm
+2. **`dist/` is committed on purpose.** A downstream deployment copies `dist/parch-touch.js`,
+   `dist/parch-touch.css`, `LICENSE` and `docs/COMPATIBILITY.md` straight out of a git tag — no npm
    registry. `scripts/ci.sh` fails on `git status --porcelain -- dist/`, so **rebuild and commit
    `dist/` in the same change as any `src/` edit**.
 3. **The bundle must stay a classic script.** `scripts/ci.sh` greps `dist/` for `import`/`export`;
@@ -165,7 +171,7 @@ Things that bit and must not be undone:
   download the front page. nginx's own mime.types already maps wasm.
 - **`WITH_PARCHMAP=0` selects an empty stand-in STAGE**, it does not `rm -rf` later. Deleting in a later
   layer left the GPL files in an earlier one — the image still carried them while claiming MIT, and was
-  not a byte smaller. Verify with `docker run --rm --entrypoint sh glk-touch -c 'find / -name "Parchmap*"'`.
+  not a byte smaller. Verify with `docker run --rm --entrypoint sh ParchTouch -c 'find / -name "Parchmap*"'`.
 - **Parchment's OWN index.html gets the overlay too** (`docker/add-overlay.mjs`). Its URL box and
   device-upload button are the only way to play something outside the library, and without the overlay
   those stories played with no touch bar. Injection is a node script, not sed: the replacement contains

@@ -3,7 +3,7 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
-<title>Parchment + glk-touch</title>
+<title>Parchment + ParchTouch</title>
 
 <!--
   A minimal play page: no story picker of its own, because the container's front page is the picker.
@@ -21,7 +21,7 @@ window.parchment_options = {
 </script>
 
 <link rel="stylesheet" href="dist/web/web.css">
-<link rel="stylesheet" href="../dist/glk-touch.css">
+<link rel="stylesheet" href="../dist/parch-touch.css">
 </head>
 <body>
 <div id="gameport">
@@ -35,7 +35,7 @@ window.parchment_options = {
 <script src="dist/web/ie.js" nomodule></script>
 <script src="dist/web/web.js" type="module"></script>
 
-<!-- glk-touch: last, after the host's scripts. web.js is a module, so this never joins its graph. -->
-<script src="../dist/glk-touch.js"></script>
+<!-- ParchTouch: last, after the host's scripts. web.js is a module, so this never joins its graph. -->
+<script src="../dist/parch-touch.js"></script>
 </body>
 </html>

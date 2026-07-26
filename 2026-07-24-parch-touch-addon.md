@@ -1,4 +1,7 @@
-# glk-touch — Touch Command Overlay for GlkOte IF Players
+# ParchTouch — Touch Command Overlay for GlkOte IF Players
+
+> Specified and built under the name **glk-touch**; renamed to **ParchTouch** on 2026-07-26 to match
+> the repository. Commits before that date, and their messages, use the old name.
 
 > **For agentic workers:** REQUIRED SUB-SKILL: Use :execute-plan to implement
 > this plan task-by-task. Steps use checkbox (`- [ ]`) syntax for tracking.
@@ -18,7 +21,7 @@ and inside **Parchmap** (where it must coexist with the auto-map).
 glue layer** (`src/if-buttons.ts`) that touches only GlkOte's documented contract (`.BufferWindow`,
 `.BufferLine`, `.Input.LineInput`, `.MorePrompt`, `.Style_input`), plus a stylesheet. The split is what
 makes the interaction rules unit-testable without a browser. esbuild bundles the modules into a single
-**IIFE** (`dist/glk-touch.js`), so a host installs it with one plain `<script>` tag — no module loader,
+**IIFE** (`dist/parch-touch.js`), so a host installs it with one plain `<script>` tag — no module loader,
 no import map, nothing for the host page to configure. **No runtime dependencies, no framework.** The
 addon **never references a specific host** — everything host-specific is feature-detected — so Parchmap
 is an *optional* host, never a dependency.
@@ -79,8 +82,8 @@ A separate deployment (in another repository) vendors this addon at a **git tag*
 
 | Artifact | Purpose |
 |----------|---------|
-| `dist/glk-touch.js` | the bundled classic script (one `<script src>` tag) |
-| `dist/glk-touch.css` | the stylesheet (one `<link>` tag) |
+| `dist/parch-touch.js` | the bundled classic script (one `<script src>` tag) |
+| `dist/parch-touch.css` | the stylesheet (one `<link>` tag) |
 | `LICENSE` | MIT text, shipped alongside so the licence travels with the files |
 | `docs/COMPATIBILITY.md` | **verified findings** the deployment depends on — see below |
 
@@ -179,7 +182,7 @@ Fiction — cannot read a server-side library.
 
 ## Success Criteria
 
-- [ ] Adding **two tags** (`dist/glk-touch.css`, `dist/glk-touch.js`) to a GlkOte page yields a working
+- [ ] Adding **two tags** (`dist/parch-touch.css`, `dist/parch-touch.js`) to a GlkOte page yields a working
       command bar — a **plain classic script**, no module loader, **no runtime dependencies**, no
       host-specific configuration.
 - [ ] A full turn — movement, `look`/`inventory`, and a verb+noun action — is possible **by tapping
@@ -284,8 +287,8 @@ Create: harness/docker-compose.yml       — nginx serving both hosts, src, dist
 Create: harness/nginx.conf               — static server + JSON story index
 Create: harness/parchment/play.html      — minimal Parchment page + the addon
 Create: harness/stories/.gitkeep         — story files are NOT committed (see README)
-Create: dist/glk-touch.js                — COMMITTED build output: esbuild IIFE bundle
-Create: dist/glk-touch.css               — COMMITTED build output: copy of src/if-buttons.css
+Create: dist/parch-touch.js                — COMMITTED build output: esbuild IIFE bundle
+Create: dist/parch-touch.css               — COMMITTED build output: copy of src/if-buttons.css
 Create: scripts/build.sh                 — esbuild: TS ESM -> dist IIFE bundle + CSS
 Create: scripts/check-independence.sh    — gate: no host-specific identifiers in src/
 Create: scripts/ci.sh                    — forge-agnostic gate runner (typecheck, test, gates, build)
@@ -310,7 +313,7 @@ deployment copies `dist/` straight out of a git tag. The `dist`-currency gate in
 - [x] **Task 0.1: Initialise the repository**
 
   ```bash
-  mkdir glk-touch && cd glk-touch
+  mkdir ParchTouch && cd ParchTouch
   git init
   mkdir -p src test harness/parchment harness/stories scripts docs dist
   touch harness/stories/.gitkeep
@@ -320,7 +323,7 @@ deployment copies `dist/` straight out of a git tag. The `dist`-currency gate in
 
   ```json
   {
-    "name": "glk-touch",
+    "name": "parch-touch",
     "version": "0.1.0",
     "description": "On-screen command buttons for GlkOte-based interactive fiction players — play parser IF by touch, no keyboard.",
     "license": "MIT",
@@ -332,7 +335,7 @@ deployment copies `dist/` straight out of a git tag. The `dist`-currency gate in
       "test": "vitest run",
       "test:watch": "vitest",
       "build": "sh scripts/build.sh",
-      "dev": "esbuild src/if-buttons.ts --bundle --format=iife --target=es2018 --sourcemap --outfile=dist/glk-touch.js --watch",
+      "dev": "esbuild src/if-buttons.ts --bundle --format=iife --target=es2018 --sourcemap --outfile=dist/parch-touch.js --watch",
       "lint:independence": "sh scripts/check-independence.sh",
       "ci": "sh scripts/ci.sh"
     },
@@ -1252,7 +1255,7 @@ deployment copies `dist/` straight out of a git tag. The `dist`-currency gate in
 
   ```typescript
   /*
-   * command-model.ts — pure command-building logic for the glk-touch overlay.
+   * command-model.ts — pure command-building logic for the ParchTouch overlay.
    *
    * SPDX-License-Identifier: MIT
    * Copyright (c) 2026 Doug Compton
@@ -1994,7 +1997,7 @@ provides a map.
 
   ```css
   /*
-   * if-buttons.css — styling for the glk-touch overlay.
+   * if-buttons.css — styling for the ParchTouch overlay.
    *
    * SPDX-License-Identifier: MIT
    * Copyright (c) 2026 Doug Compton
@@ -2213,7 +2216,7 @@ over HTTP.
   | <http://localhost:8080/stories/> | the story directory (same-origin, so no CORS proxy) |
 
   Both pages load the **ESM sources** from `/shared/` for a fast edit-reload loop. To verify what
-  actually ships, switch a page to the bundle (`../dist/glk-touch.js`, one classic `<script>`) — Task
+  actually ships, switch a page to the bundle (`../dist/parch-touch.js`, one classic `<script>`) — Task
   5.4 requires doing this at least once.
 
   No Docker? `python3 -m http.server 8080` from this directory also works.
@@ -2271,12 +2274,12 @@ over HTTP.
   ```bash
   npm run dev      # leave running in its own terminal
   ```
-  Expected: `dist/glk-touch.js` (+ `.js.map`) written, and rewritten on each save of `src/`.
+  Expected: `dist/parch-touch.js` (+ `.js.map`) written, and rewritten on each save of `src/`.
 
   A browser reload then picks up the change, and because the harness loads the **same artifact a real
   deployment installs**, the "works in dev, broken in dist" failure mode cannot occur.
 
-  > `dist/glk-touch.js.map` is a dev-only by-product of `--sourcemap`. Add it to `.gitignore` so the
+  > `dist/parch-touch.js.map` is a dev-only by-product of `--sourcemap`. Add it to `.gitignore` so the
   > `dist` currency gate (Task 7.3) does not fail on it: the released bundle is built by
   > `scripts/build.sh`, which emits no map.
 
@@ -2290,7 +2293,7 @@ over HTTP.
   <head>
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
-  <title>Parchment + glk-touch</title>
+  <title>Parchment + ParchTouch</title>
 
   <!--
     parchment_options is Parchment's supported config global and MUST be set BEFORE its scripts load.
@@ -2312,7 +2315,7 @@ over HTTP.
   </script>
 
   <link rel="stylesheet" href="../parchment-vendor/dist/web/web.css">
-  <link rel="stylesheet" href="../dist/glk-touch.css">
+  <link rel="stylesheet" href="../dist/parch-touch.css">
   </head>
   <body>
   <div id="gameport">
@@ -2327,7 +2330,7 @@ over HTTP.
   <script type="module" src="../parchment-vendor/dist/web/web.js"></script>
 
   <!-- the addon: the same single classic script a real deployment installs -->
-  <script src="../dist/glk-touch.js"></script>
+  <script src="../dist/parch-touch.js"></script>
   </body>
   </html>
   ```
@@ -2338,9 +2341,9 @@ over HTTP.
   Parchmap's own scripts, so `.BufferWindow` exists and its handlers are already bound:
 
   ```html
-  <!-- glk-touch (MIT) loaded into Parchmap (GPL-3.0) for local verification. -->
-  <link rel="stylesheet" href="../dist/glk-touch.css">
-  <script src="../dist/glk-touch.js"></script>
+  <!-- ParchTouch (MIT) loaded into Parchmap (GPL-3.0) for local verification. -->
+  <link rel="stylesheet" href="../dist/parch-touch.css">
+  <script src="../dist/parch-touch.js"></script>
   ```
 
   This edit lives in the git-ignored `vendor/` tree — the harness never commits a modified host.
@@ -2408,11 +2411,11 @@ over HTTP.
 
 - [x] **Task 5.4: Verify the shipped bundle, not just the source**
 
-  The harness already loads `dist/glk-touch.js`, so confirm the artifact is the real thing:
+  The harness already loads `dist/parch-touch.js`, so confirm the artifact is the real thing:
 
   ```bash
   npm run build
-  grep -cE '^\s*(import|export)\b' dist/glk-touch.js    # expect 0 — it must be a classic script
+  grep -cE '^\s*(import|export)\b' dist/parch-touch.js    # expect 0 — it must be a classic script
   ```
   Reload the harness page with devtools open: no module-loading errors, bar renders, a tap works.
 
@@ -2622,7 +2625,7 @@ same output. These checks are the crux of the "works with Parchmap" claim.
   # An explicit banner, not --legal-comments: esbuild only preserves comments marked @license,
   # @preserve or //!, so an SPDX-only header would be stripped. MIT requires the notice to travel
   # with the code, so state it unconditionally.
-  BANNER='/*! glk-touch — on-screen commands for GlkOte interactive fiction players.
+  BANNER='/*! ParchTouch — on-screen commands for GlkOte interactive fiction players.
    * SPDX-License-Identifier: MIT
    * Copyright (c) 2026 Doug Compton
    */'
@@ -2632,11 +2635,11 @@ same output. These checks are the crux of the "works with Parchmap" claim.
     --format=iife \
     --target=es2018 \
     --banner:js="$BANNER" \
-    --outfile=dist/glk-touch.js
+    --outfile=dist/parch-touch.js
 
-  cp src/if-buttons.css dist/glk-touch.css
+  cp src/if-buttons.css dist/parch-touch.css
 
-  echo "built dist/glk-touch.js and dist/glk-touch.css"
+  echo "built dist/parch-touch.js and dist/parch-touch.css"
   ```
 
 - [x] **Task 7.2: Independence gate**
@@ -2676,8 +2679,8 @@ same output. These checks are the crux of the "works with Parchmap" claim.
   echo "== build ==";          npm run build
 
   echo "== dist is a classic script =="
-  if grep -nE '^[[:space:]]*(import|export)[[:space:]]' dist/glk-touch.js; then
-    echo "FAIL: dist/glk-touch.js contains ESM syntax; hosts load it as a classic script." >&2
+  if grep -nE '^[[:space:]]*(import|export)[[:space:]]' dist/parch-touch.js; then
+    echo "FAIL: dist/parch-touch.js contains ESM syntax; hosts load it as a classic script." >&2
     exit 1
   fi
 
@@ -2701,7 +2704,7 @@ same output. These checks are the crux of the "works with Parchmap" claim.
   File: `docs/INSTALL.md`
 
   ```markdown
-  # Installing glk-touch
+  # Installing ParchTouch
 
   Two tags in any GlkOte-based player's page. No build step for you, no dependencies, no configuration.
 
@@ -2710,8 +2713,8 @@ same output. These checks are the crux of the "works with Parchmap" claim.
   Add **before `</body>`**, after the host's own scripts:
 
   ```html
-  <link rel="stylesheet" href="glk-touch.css">
-  <script src="glk-touch.js"></script>
+  <link rel="stylesheet" href="parch-touch.css">
+  <script src="parch-touch.js"></script>
   ```
 
   Order matters: the host must have created its `.BufferWindow` before the bar can attach. The addon
@@ -2778,7 +2781,7 @@ same output. These checks are the crux of the "works with Parchmap" claim.
   git add -A
   git commit -m "chore: release v0.1.0 — bundle, install docs, gates"
   sh scripts/ci.sh        # dist/ is now committed, so the currency gate passes
-  git tag -a v0.1.0 -m "glk-touch v0.1.0 — tap-only commands for GlkOte IF players"
+  git tag -a v0.1.0 -m "ParchTouch v0.1.0 — tap-only commands for GlkOte IF players"
   ```
 
   A downstream deployment pins **this tag** and copies the §0.3 artifacts.

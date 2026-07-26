@@ -8,7 +8,7 @@ set -eu
 
 mkdir -p dist
 
-OUT=dist/glk-touch.js
+OUT=dist/parch-touch.js
 
 npx esbuild src/if-buttons.ts \
   --bundle \
@@ -25,7 +25,7 @@ npx esbuild src/if-buttons.ts \
 # esbuild then writes the bundle to stdout and this script would exit 0 having produced nothing.
 {
   printf '%s\n' \
-    '/*! glk-touch — on-screen commands for GlkOte interactive fiction players.' \
+    '/*! ParchTouch — on-screen commands for GlkOte interactive fiction players.' \
     ' * SPDX-License-Identifier: MIT' \
     ' * Copyright (c) 2026 Doug Compton' \
     ' */'
@@ -33,15 +33,15 @@ npx esbuild src/if-buttons.ts \
 } > "$OUT.tmp"
 mv "$OUT.tmp" "$OUT"
 
-cp src/if-buttons.css dist/glk-touch.css
+cp src/if-buttons.css dist/parch-touch.css
 
 # Fail loudly rather than reporting success on an empty or missing artifact — the failure mode above
 # was silent, and a downstream deployment pins whatever is committed here.
-for f in "$OUT" dist/glk-touch.css; do
+for f in "$OUT" dist/parch-touch.css; do
   if [ ! -s "$f" ]; then
     echo "FAIL: $f was not produced." >&2
     exit 1
   fi
 done
 
-echo "built dist/glk-touch.js and dist/glk-touch.css"
+echo "built dist/parch-touch.js and dist/parch-touch.css"

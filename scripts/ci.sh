@@ -15,8 +15,8 @@ echo "== build ==";          npm run build
 echo "== e2e ==";            npm run test:e2e
 
 echo "== dist is a classic script =="
-if grep -nE '^[[:space:]]*(import|export)[[:space:]]' dist/glk-touch.js; then
-  echo "FAIL: dist/glk-touch.js contains ESM syntax; hosts load it as a classic script." >&2
+if grep -nE '^[[:space:]]*(import|export)[[:space:]]' dist/parch-touch.js; then
+  echo "FAIL: dist/parch-touch.js contains ESM syntax; hosts load it as a classic script." >&2
   exit 1
 fi
 

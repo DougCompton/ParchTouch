@@ -32,9 +32,9 @@
 import { readdirSync, readFileSync, writeFileSync, mkdirSync, existsSync, copyFileSync, statSync } from 'node:fs'
 import { basename, extname, join } from 'node:path'
 
-const STORIES = process.env['GLKTOUCH_STORIES'] ?? '/stories'
-const ROOT = process.env['GLKTOUCH_ROOT'] ?? '/usr/share/nginx/html'
-const SEED = process.env['GLKTOUCH_SEED'] ?? '/opt/glk-touch/seed'
+const STORIES = process.env['PARCHTOUCH_STORIES'] ?? '/stories'
+const ROOT = process.env['PARCHTOUCH_ROOT'] ?? '/usr/share/nginx/html'
+const SEED = process.env['PARCHTOUCH_SEED'] ?? '/opt/parch-touch/seed'
 
 const PARCHMAP = join(ROOT, 'parchmap')
 const GAMES = join(PARCHMAP, 'games')
@@ -125,7 +125,7 @@ export function scanLibrary() {
       try {
         kind = storyKind(readFileSync(join(STORIES, name)))
       } catch (err) {
-        console.warn('[glk-touch] could not read ' + name + ': ' + err.message)
+        console.warn('[ParchTouch] could not read ' + name + ': ' + err.message)
       }
       return { name, title: titleOf(name), zcode: kind === 'zcode' }
     })
@@ -174,7 +174,7 @@ export function ensureWrapped(name, library) {
     writeFileSync(target, wrapperFor(readFileSync(source)))
     return target
   } catch (err) {
-    console.warn('[glk-touch] could not wrap ' + entry.name + ': ' + err.message)
+    console.warn('[ParchTouch] could not wrap ' + entry.name + ': ' + err.message)
     return null
   }
 }
@@ -206,14 +206,14 @@ export function rewriteGameList(wrapped) {
     }))
     const suffix = entries.length === 0
       ? ''
-      : '\n\n/* Added by glk-touch from the mounted story library. */\n'
+      : '\n\n/* Added by parch-touch from the mounted story library. */\n'
         + 'GameList = ' + JSON.stringify(entries, null, 4) + '.concat(GameList);\n'
     const next = readFileSync(bundled, 'utf8') + suffix
     // Only write when it actually changed: this runs on every library request, and rewriting an
     // unchanged file would churn its mtime for nothing.
     if (!existsSync(target) || readFileSync(target, 'utf8') !== next) { writeFileSync(target, next) }
   } catch (err) {
-    console.warn('[glk-touch] could not update the game menu: ' + err.message)
+    console.warn('[ParchTouch] could not update the game menu: ' + err.message)
   }
 }
 
@@ -225,11 +225,11 @@ function seedIfEmpty(found) {
   try {
     mkdirSync(STORIES, { recursive: true })
     copyFileSync(seed, join(STORIES, 'advent.z5'))
-    console.log('[glk-touch] library was empty — seeded Adventure')
+    console.log('[ParchTouch] library was empty — seeded Adventure')
     return scanLibrary()
   } catch {
     // A read-only mount is the normal case; the picker will simply show what is there.
-    console.log('[glk-touch] library is empty and read-only — mount stories at ' + STORIES)
+    console.log('[ParchTouch] library is empty and read-only — mount stories at ' + STORIES)
     return found
   }
 }
@@ -250,7 +250,7 @@ export function refresh({ seed = false } = {}) {
 /** Startup pass. Seeds the volume if it is empty, and says what it found. */
 export function prepare() {
   const { stories, wrapped } = refresh({ seed: true })
-  console.log('[glk-touch] ' + stories.length + ' game(s) in ' + STORIES
+  console.log('[ParchTouch] ' + stories.length + ' game(s) in ' + STORIES
     + (parchmapPresent() ? ', ' + wrapped.length + ' available to Parchmap' : ''))
   return { stories, wrapped }
 }

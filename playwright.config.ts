@@ -51,7 +51,7 @@ export default defineConfig({
    */
   webServer: {
     command: 'node scripts/serve-harness.mjs 8080',
-    url: 'http://127.0.0.1:8080/dist/glk-touch.js',
+    url: 'http://127.0.0.1:8080/dist/parch-touch.js',
     reuseExistingServer: !process.env['CI'],
     timeout: 30_000,
   },

@@ -1,5 +1,5 @@
 /*
- * add-overlay.mjs — add the two glk-touch tags to a host's HTML page.
+ * add-overlay.mjs — add the two parch-touch tags to a host's HTML page.
  *
  * SPDX-License-Identifier: MIT
  * Copyright (c) 2026 Doug Compton
@@ -24,24 +24,24 @@ if (!file) {
 
 let html = readFileSync(file, 'utf8')
 
-if (html.includes('glk-touch.js')) {
-  console.log('[glk-touch] ' + file + ' already has the overlay')
+if (html.includes('parch-touch.js')) {
+  console.log('[ParchTouch] ' + file + ' already has the overlay')
   process.exit(0)
 }
 if (!html.includes('</head>') || !html.includes('</body>')) {
-  console.error('[glk-touch] ' + file + ' has no </head> or </body> to inject into')
+  console.error('[ParchTouch] ' + file + ' has no </head> or </body> to inject into')
   process.exit(1)
 }
 
 // The script goes LAST in the body, after the host's own scripts, so .BufferWindow already exists.
 html = html
-  .replace('</head>', '    <link rel="stylesheet" href="' + prefix + 'dist/glk-touch.css">\n</head>')
-  .replace('</body>', '    <script src="' + prefix + 'dist/glk-touch.js"></script>\n</body>')
+  .replace('</head>', '    <link rel="stylesheet" href="' + prefix + 'dist/parch-touch.css">\n</head>')
+  .replace('</body>', '    <script src="' + prefix + 'dist/parch-touch.js"></script>\n</body>')
 
 writeFileSync(file, html)
 
-if (!readFileSync(file, 'utf8').includes('glk-touch.js')) {
-  console.error('[glk-touch] injection into ' + file + ' did not take')
+if (!readFileSync(file, 'utf8').includes('parch-touch.js')) {
+  console.error('[ParchTouch] injection into ' + file + ' did not take')
   process.exit(1)
 }
-console.log('[glk-touch] overlay added to ' + file)
+console.log('[ParchTouch] overlay added to ' + file)

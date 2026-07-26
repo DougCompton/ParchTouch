@@ -1,4 +1,4 @@
-/*! glk-touch — on-screen commands for GlkOte interactive fiction players.
+/*! ParchTouch — on-screen commands for GlkOte interactive fiction players.
  * SPDX-License-Identifier: MIT
  * Copyright (c) 2026 Doug Compton
  */

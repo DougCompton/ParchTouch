@@ -1,10 +1,10 @@
-# glk-touch
+# ParchTouch
 
 On-screen commands for **GlkOte**-based interactive fiction players — play parser IF by touch, with no
 keyboard.
 
 Parser IF means typing a command every turn, which is miserable on a tablet where a software keyboard
-covers a third of the screen. `glk-touch` overlays a direction pad and an editable word list onto an
+covers a third of the screen. **ParchTouch** overlays a direction pad and an editable word list onto an
 existing browser IF player, and makes every word in the story text tappable — so a whole session needs
 zero keystrokes.
 
@@ -18,8 +18,8 @@ The addon itself is always the same two tags, added **before `</body>`** and **a
 scripts**:
 
 ```html
-<link rel="stylesheet" href="glk-touch.css">
-<script src="glk-touch.js"></script>
+<link rel="stylesheet" href="parch-touch.css">
+<script src="parch-touch.js"></script>
 ```
 
 No module loader, no import map, no host-specific configuration. Order matters only because the host
@@ -40,11 +40,11 @@ required step, not an optional one. The Docker image handles that for you.
 
 ### Get the two files
 
-Either way you install, you need `glk-touch.js` and `glk-touch.css`:
+Either way you install, you need `parch-touch.js` and `parch-touch.css`:
 
 ```bash
 git clone https://github.com/DougCompton/ParchTouch
-# dist/glk-touch.js and dist/glk-touch.css are committed — no build step needed
+# dist/parch-touch.js and dist/parch-touch.css are committed — no build step needed
 ```
 
 `dist/` is committed deliberately, so you can copy the two files straight out of a checkout or a git
@@ -54,7 +54,7 @@ tag. If you would rather build them yourself: `npm install && npm run build`.
 
 ### A. Adding it to a player you already run
 
-1. Copy `dist/glk-touch.js` and `dist/glk-touch.css` next to the host's own assets.
+1. Copy `dist/parch-touch.js` and `dist/parch-touch.css` next to the host's own assets.
 2. Open the page the game is played on and add the two tags before `</body>`, after every one of the
    host's scripts. Adjust the two `href`/`src` paths to wherever you put the files.
 3. Reload. A command bar appears at the bottom, and words in the story text become tappable.
@@ -111,8 +111,8 @@ site/
       web.js  web.css  jquery.min.js  ie.js
       bocfel.js  bocfel.wasm  waiting.gif
   dist/fonts/                <- optional; silences console 404s
-  glk-touch.js               <- from this repo's dist/
-  glk-touch.css
+  parch-touch.js               <- from this repo's dist/
+  parch-touch.css
   stories/
       advent.z5              <- your story files, raw and unwrapped
 ```
@@ -126,10 +126,10 @@ CORS proxy — so the whole thing works offline.
 else:
 
 ```html
-    <link rel="stylesheet" href="glk-touch.css">   <!-- before </head> -->
+    <link rel="stylesheet" href="parch-touch.css">   <!-- before </head> -->
 </head>
 ...
-    <script src="glk-touch.js"></script>           <!-- before </body> -->
+    <script src="parch-touch.js"></script>           <!-- before </body> -->
 </body>
 ```
 
@@ -153,7 +153,7 @@ story. Save as `play.html`:
 </script>
 
 <link rel="stylesheet" href="dist/web/web.css">
-<link rel="stylesheet" href="glk-touch.css">
+<link rel="stylesheet" href="parch-touch.css">
 </head>
 <body>
 <div id="gameport">
@@ -167,8 +167,8 @@ story. Save as `play.html`:
 <script src="dist/web/ie.js" nomodule></script>
 <script src="dist/web/web.js" type="module"></script>
 
-<!-- glk-touch: last, after the host's scripts -->
-<script src="glk-touch.js"></script>
+<!-- ParchTouch: last, after the host's scripts -->
+<script src="parch-touch.js"></script>
 </body>
 </html>
 ```
@@ -221,12 +221,12 @@ Do this **before serving anything**, especially on a LAN.
 
 #### 2. Add the addon
 
-Copy `glk-touch.js` and `glk-touch.css` into the Parchmap directory, then add the two tags to
+Copy `parch-touch.js` and `parch-touch.css` into the Parchmap directory, then add the two tags to
 `play.html` immediately before `</body>` — after all of Parchmap's own `js/*.js`:
 
 ```html
-  <link rel="stylesheet" href="glk-touch.css">
-  <script src="glk-touch.js"></script>
+  <link rel="stylesheet" href="parch-touch.css">
+  <script src="parch-touch.js"></script>
 </body>
 ```
 
@@ -284,8 +284,8 @@ hunting down and vendoring a player by hand.
 
 ```bash
 git clone https://github.com/DougCompton/ParchTouch && cd ParchTouch
-docker build -t glk-touch .
-docker run -d --name glk-touch -p 8080:80 -v /srv/if-stories:/stories:ro glk-touch
+docker build -t parch-touch .
+docker run -d --name parch-touch -p 8080:80 -v /srv/if-stories:/stories:ro parch-touch
 ```
 
 Open **<http://localhost:8080/>**. From the tablet, use the server's own address on your network —
@@ -294,7 +294,7 @@ Open **<http://localhost:8080/>**. From the tablet, use the server's own address
 You do not even need a library to start:
 
 ```bash
-docker run -d -p 8080:80 glk-touch      # seeds Adventure into an empty library
+docker run -d -p 8080:80 ParchTouch      # seeds Adventure into an empty library
 ```
 
 ### …or with Compose
@@ -366,7 +366,7 @@ Two caveats worth knowing:
 | `PARCHMAP_REF` | `main` | branch or tag of Parchmap to vendor |
 
 ```bash
-docker build --build-arg WITH_PARCHMAP=0 -t glk-touch:mit .
+docker build --build-arg WITH_PARCHMAP=0 -t parch-touch:mit .
 ```
 
 To pick up a new version of the addon, rebuild and recreate the container; the addon is always built
@@ -486,7 +486,7 @@ npm test                    # unit tests, vitest + jsdom
 npm run test:e2e            # end-to-end, Chromium + WebKit, against real hosts
 npm run typecheck           # tsc --noEmit; esbuild strips types but does not check them
 npm run lint:independence   # fails if src/ names a specific host
-npm run build               # dist/glk-touch.js (IIFE) + dist/glk-touch.css
+npm run build               # dist/parch-touch.js (IIFE) + dist/parch-touch.css
 sh scripts/ci.sh            # every gate, in fail-fastest order
 ```
 

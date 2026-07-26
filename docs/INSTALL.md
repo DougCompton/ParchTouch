@@ -1,4 +1,4 @@
-# Installing glk-touch
+# Installing ParchTouch
 
 Two tags in any GlkOte-based player's page. No build step for you, no dependencies, no configuration.
 
@@ -12,8 +12,8 @@ Two tags in any GlkOte-based player's page. No build step for you, no dependenci
 Add **before `</body>`**, after the host's own scripts:
 
 ```html
-<link rel="stylesheet" href="glk-touch.css">
-<script src="glk-touch.js"></script>
+<link rel="stylesheet" href="parch-touch.css">
+<script src="parch-touch.js"></script>
 ```
 
 Order matters: the host must have created its `.BufferWindow` before the bar can attach. The addon

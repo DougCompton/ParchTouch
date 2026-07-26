@@ -3,7 +3,7 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
-<title>Story library — glk-touch</title>
+<title>Story library — ParchTouch</title>
 
 <!--
   The picker. Neither bundled player has a library browser for a mounted volume, so this is it.
@@ -126,7 +126,7 @@
       var e = document.createElement('div')
       e.className = 'empty'
       e.innerHTML = 'No stories found. Mount a directory of story files at <code>/stories</code>:'
-        + '<br><code>docker run -p 8080:80 -v /srv/if-stories:/stories:ro glk-touch</code>'
+        + '<br><code>docker run -p 8080:80 -v /srv/if-stories:/stories:ro parch-touch</code>'
       out.appendChild(e)
       sub.textContent = 'Nothing in the library yet.'
       return
@@ -213,9 +213,9 @@
 
   function licences(hasParchmap) {
     document.getElementById('licences').innerHTML = hasParchmap
-      ? 'glk-touch and Parchment are MIT; Parchmap is GPL-3.0, so this image as a whole is conveyed '
+      ? 'parch-touch and Parchment are MIT; Parchmap is GPL-3.0, so this image as a whole is conveyed '
         + 'under GPL-3.0. Licences are in <code>/licences</code> in the container.'
-      : 'glk-touch and Parchment are both MIT. Licences are in <code>/licences</code> in the container.'
+      : 'parch-touch and Parchment are both MIT. Licences are in <code>/licences</code> in the container.'
   }
 
   // The manifest: authoritative about which player can take each story, and requesting it is what

@@ -6,14 +6,14 @@
 # For the LOCAL DEV HARNESS instead (vendored hosts, bind mounts, no image build), use
 # harness/docker-compose.yml. They are different things and deliberately separate.
 services:
-  glk-touch:
+  parch-touch:
     build:
       context: .
       # WITH_PARCHMAP=0 leaves Parchmap out entirely, giving a purely MIT image (~200MB rather than
       # ~385MB) at the cost of the automatic map.
       args:
         WITH_PARCHMAP: "1"
-    image: glk-touch
+    image: parch-touch
     ports:
       - "${PORT:-8080}:80"
     volumes:
